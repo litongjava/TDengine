@@ -1132,6 +1132,7 @@ typedef struct {
   int16_t hashPrefix;
   int16_t hashSuffix;
   int32_t tsdbPageSize;
+  int8_t  withArbitrator;
   int32_t sqlLen;
   char*   sql;
 } SCreateDbReq;
@@ -1284,6 +1285,7 @@ typedef struct {
   SArray* pRetensions;
   int8_t  schemaless;
   int16_t sstTrigger;
+  int8_t  withArbitrator;
 } SDbCfgRsp;
 
 typedef SDbCfgRsp SDbCfgInfo;
@@ -1562,12 +1564,14 @@ typedef struct {
 typedef struct {
   int32_t id;
   int8_t  isMnode;
+  int8_t  isArbitrator;
   SEp     ep;
 } SDnodeEp;
 
 typedef struct {
   int32_t id;
   int8_t  isMnode;
+  int8_t  isArbitrator;
   SEp     ep;
   char    active[TSDB_ACTIVE_KEY_LEN];
   char    connActive[TSDB_CONN_ACTIVE_KEY_LEN];
@@ -1651,6 +1655,9 @@ typedef struct {
   int8_t   learnerSelfIndex;
   SReplica learnerReplicas[TSDB_MAX_LEARNER_REPLICA];
   int32_t  changeVersion;
+  int8_t   hasArbitrator;
+  int8_t   arbitratorSelfIndex;
+  SReplica arbitratorReplica;
 } SCreateVnodeReq;
 
 int32_t tSerializeSCreateVnodeReq(void* buf, int32_t bufLen, SCreateVnodeReq* pReq);

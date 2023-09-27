@@ -1052,6 +1052,7 @@ SNode* createDefaultDatabaseOptions(SAstCreateContext* pCxt) {
   pOptions->sstTrigger = TSDB_DEFAULT_SST_TRIGGER;
   pOptions->tablePrefix = TSDB_DEFAULT_HASH_PREFIX;
   pOptions->tableSuffix = TSDB_DEFAULT_HASH_SUFFIX;
+  pOptions->withArbitrator = TSDB_DEFAULT_DB_WITH_ARBITRATOR;
   return (SNode*)pOptions;
 }
 
@@ -1087,6 +1088,7 @@ SNode* createAlterDatabaseOptions(SAstCreateContext* pCxt) {
   pOptions->sstTrigger = -1;
   pOptions->tablePrefix = -1;
   pOptions->tableSuffix = -1;
+  pOptions->withArbitrator = 0;
   return (SNode*)pOptions;
 }
 
@@ -1203,6 +1205,10 @@ static SNode* setDatabaseOptionImpl(SAstCreateContext* pCxt, SNode* pOptions, ED
     }
     case DB_OPTION_KEEP_TIME_OFFSET: {
       pDbOptions->keepTimeOffset = taosStr2Int32(((SToken*)pVal)->z, NULL, 10);
+      break;
+    }
+    case DB_OPTION_WITH_ARBITRATOR: {
+      pDbOptions->withArbitrator = true;
       break;
     }
     default:
@@ -1559,7 +1565,7 @@ SNode* createShowStmt(SAstCreateContext* pCxt, ENodeType type) {
 SNode* setShowKind(SAstCreateContext* pCxt, SNode* pStmt, EShowKind showKind) {
   if (pStmt == NULL) {
     return NULL;
-  } 
+  }
   SShowStmt* pShow = (SShowStmt*)pStmt;
   pShow->showKind = showKind;
   return pStmt;
