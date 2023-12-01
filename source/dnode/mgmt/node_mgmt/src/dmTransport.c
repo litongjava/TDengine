@@ -192,6 +192,9 @@ static void dmProcessRpcMsg(SDnode *pDnode, SRpcMsg *pRpc, SEpSet *pEpSet) {
         case MNODE_HANDLE:
           pWrapper = &pDnode->wrappers[MNODE];
           break;
+        case ARBITRATOR_HANDLE:
+          pWrapper = &pDnode->wrappers[ARBITRATOR];
+          break;
         default:
           break;
       }

@@ -43,6 +43,7 @@ int32_t dmInitDnode(SDnode *pDnode) {
   pDnode->wrappers[VNODE].func = vmGetMgmtFunc();
   pDnode->wrappers[QNODE].func = qmGetMgmtFunc();
   pDnode->wrappers[SNODE].func = smGetMgmtFunc();
+  pDnode->wrappers[ARBITRATOR].func = arbmGetMgmtFunc();
 
   for (EDndNodeType ntype = DNODE; ntype < NODE_END; ++ntype) {
     SMgmtWrapper *pWrapper = &pDnode->wrappers[ntype];
@@ -216,6 +217,9 @@ int32_t dmMarkWrapper(SMgmtWrapper *pWrapper) {
         break;
       case SNODE:
         terrno = TSDB_CODE_SNODE_NOT_FOUND;
+        break;
+      case ARBITRATOR:
+        terrno = TSDB_CODE_ARBITRATOR_NOT_FOUND;
         break;
       case VNODE:
         terrno = TSDB_CODE_VND_STOPPED;

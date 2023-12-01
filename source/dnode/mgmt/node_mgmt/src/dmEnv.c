@@ -226,6 +226,9 @@ static int32_t dmProcessCreateNodeReq(EDndNodeType ntype, SRpcMsg *pMsg) {
       case SNODE:
         terrno = TSDB_CODE_SNODE_ALREADY_DEPLOYED;
         break;
+      case ARBITRATOR:
+        terrno = TSDB_CODE_ARBITRATOR_ALREADY_DEPLOYED;
+        break;
       default:
         terrno = TSDB_CODE_APP_ERROR;
     }
@@ -347,6 +350,9 @@ static int32_t dmProcessDropNodeReq(EDndNodeType ntype, SRpcMsg *pMsg) {
         break;
       case SNODE:
         terrno = TSDB_CODE_SNODE_NOT_DEPLOYED;
+        break;
+      case ARBITRATOR:
+        terrno = TSDB_CODE_ARBITRATOR_NOT_DEPLOYED;
         break;
       default:
         terrno = TSDB_CODE_APP_ERROR;

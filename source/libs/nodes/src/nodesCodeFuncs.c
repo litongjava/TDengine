@@ -33,7 +33,7 @@ typedef int32_t (*FExecJsonToNode)(const SJson* pJson, void* pObj);
 typedef void (*FExecDestoryNode)(SNode* pNode);
 
 /**
- * @brief Node operation to binding function set 
+ * @brief Node operation to binding function set
  */
 typedef struct SBuiltinNodeDefinition {
   const char* name;
@@ -66,7 +66,7 @@ bool funcArrayCheck(int32_t type) {
   }
   // only init once, do nothing when run funcArrayCheck again
   taosThreadOnce(&functionNodeInit, doInitNodeFuncArray);
-  
+
   if (!funcNodes[type].name) {
     nodesError("funcArrayCheck unsupported type = %d", type);
     return false;
@@ -453,7 +453,7 @@ static int32_t jsonToLogicScanNode(const SJson* pJson, void* pObj) {
   if (TSDB_CODE_SUCCESS == code) {
     code = tjsonGetBoolValue(pJson, jkScanLogicPlanOnlyMetaCtbIdx, &pNode->onlyMetaCtbIdx);
   }
-  
+
   return code;
 }
 
@@ -2732,16 +2732,16 @@ static int32_t physiGroupCacheNodeToJson(const void* pObj, SJson* pJson) {
   int32_t code = physicPlanNodeToJson(pObj, pJson);
   if (TSDB_CODE_SUCCESS == code) {
     code = tjsonAddBoolToObject(pJson, jkGroupCachePhysiPlanGrpColsMayBeNull, pNode->grpColsMayBeNull);
-  }  
+  }
   if (TSDB_CODE_SUCCESS == code) {
     code = tjsonAddBoolToObject(pJson, jkGroupCachePhysiPlanGroupByUid, pNode->grpByUid);
-  }  
+  }
   if (TSDB_CODE_SUCCESS == code) {
     code = tjsonAddBoolToObject(pJson, jkGroupCachePhysiPlanGlobalGroup, pNode->globalGrp);
-  }  
+  }
   if (TSDB_CODE_SUCCESS == code) {
     code = tjsonAddBoolToObject(pJson, jkGroupCachePhysiPlanBatchFetch, pNode->batchFetch);
-  }  
+  }
   if (TSDB_CODE_SUCCESS == code) {
     code = nodeListToJson(pJson, jkGroupCachePhysiPlanGroupCols, pNode->pGroupCols);
   }
@@ -5619,6 +5619,18 @@ static int32_t dropMnodeStmtToJson(const void* pObj, SJson* pJson) { return drop
 
 static int32_t jsonToDropMnodeStmt(const SJson* pJson, void* pObj) { return jsonToDropComponentNodeStmt(pJson, pObj); }
 
+static int32_t createArbitratorStmtToJson(const void* pObj, SJson* pJson) {
+  return createComponentNodeStmtToJson(pObj, pJson);
+}
+
+static int32_t jsonToCreateArbitratorStmt(const SJson* pJson, void* pObj) {
+  return jsonToCreateComponentNodeStmt(pJson, pObj);
+}
+
+static int32_t dropArbitratorStmtToJson(const void* pObj, SJson* pJson) { return dropComponentNodeStmtToJson(pObj, pJson); }
+
+static int32_t jsonToDropArbitratorStmt(const SJson* pJson, void* pObj) { return jsonToDropComponentNodeStmt(pJson, pObj); }
+
 static const char* jkDropDnodeStmtDnodeId = "DnodeId";
 static const char* jkDropDnodeStmtFqdn = "Fqdn";
 static const char* jkDropDnodeStmtPort = "Port";
@@ -6709,17 +6721,17 @@ void destroyPhysiNode(SNode* pInput) {
 
 void destroyExprNode(SNode* pNode) {
   SExprNode* pExpr = (SExprNode*)pNode;
-  taosArrayDestroy(pExpr->pAssociation); 
+  taosArrayDestroy(pExpr->pAssociation);
 }
 
 void destroyDataInSmaIndex(void* pIndex) {
-  taosMemoryFree(((STableIndexInfo*)pIndex)->expr); 
+  taosMemoryFree(((STableIndexInfo*)pIndex)->expr);
 }
 
 void destoryXNode(SNode* pNode) {}
 
-void destroyColumnNode(SNode* pNode) { 
-  destroyExprNode(pNode); 
+void destroyColumnNode(SNode* pNode) {
+  destroyExprNode(pNode);
 }
 
 void destroyValueNode(SNode* pNode) {
@@ -6939,12 +6951,12 @@ void destoryCreateSubTableClause(SNode* pNode) {
   nodesDestroyNode((SNode*)pStmt->pOptions);
 }
 
-void destoryCreateMultiTablesStmt(SNode* pNode) { 
-  nodesDestroyList(((SCreateMultiTablesStmt*)pNode)->pSubTables); 
+void destoryCreateMultiTablesStmt(SNode* pNode) {
+  nodesDestroyList(((SCreateMultiTablesStmt*)pNode)->pSubTables);
 }
 
-void destoryDropTableStmt(SNode* pNode) { 
-  nodesDestroyList(((SDropTableStmt*)pNode)->pTables); 
+void destoryDropTableStmt(SNode* pNode) {
+  nodesDestroyList(((SDropTableStmt*)pNode)->pTables);
 }
 
 void destoryAlterTableStmt(SNode* pNode) {
@@ -6986,8 +6998,8 @@ void destoryExplainStmt(SNode* pNode) {
   nodesDestroyNode(pStmt->pQuery);
 }
 
-void destoryDescribeStmt(SNode* pNode) { 
-  taosMemoryFree(((SDescribeStmt*)pNode)->pMeta); 
+void destoryDescribeStmt(SNode* pNode) {
+  taosMemoryFree(((SDescribeStmt*)pNode)->pMeta);
 }
 
 void destoryCompactDatabaseStmt(SNode* pNode) {
@@ -7006,16 +7018,16 @@ void destoryCreateStreamStmt(SNode* pNode) {
   taosMemoryFreeClear(pStmt->pReq);
 }
 
-void destoryRedistributeVgroupStmt(SNode* pNode) { 
+void destoryRedistributeVgroupStmt(SNode* pNode) {
   nodesDestroyList(((SRedistributeVgroupStmt*)pNode)->pDnodes);
 }
 
-void destoryGrantStmt(SNode* pNode) { 
-  nodesDestroyNode(((SGrantStmt*)pNode)->pTagCond); 
+void destoryGrantStmt(SNode* pNode) {
+  nodesDestroyNode(((SGrantStmt*)pNode)->pTagCond);
 }
 
-void destoryRevokeStmt(SNode* pNode) { 
-  nodesDestroyNode(((SRevokeStmt*)pNode)->pTagCond); 
+void destoryRevokeStmt(SNode* pNode) {
+  nodesDestroyNode(((SRevokeStmt*)pNode)->pTagCond);
 }
 
 void destoryShowStmt(SNode* pNode) {
@@ -7036,8 +7048,8 @@ void destoryShowDnodeVariablesStmt(SNode* pNode) {
   nodesDestroyNode(((SShowDnodeVariablesStmt*)pNode)->pLikePattern);
 }
 
-void destoryShowCreateDatabaseStmt(SNode* pNode) { 
-  taosMemoryFreeClear(((SShowCreateDatabaseStmt*)pNode)->pCfg); 
+void destoryShowCreateDatabaseStmt(SNode* pNode) {
+  taosMemoryFreeClear(((SShowCreateDatabaseStmt*)pNode)->pCfg);
 }
 
 void destoryShowCreateTableStmt(SNode* pNode) {
@@ -7142,8 +7154,8 @@ void destoryVnodeModifyLogicNode(SNode* pNode) {
   nodesDestroyList(pLogicNode->pInsertCols);
 }
 
-void destoryExchangeLogicNode(SNode* pNode) { 
-  destroyLogicNode((SLogicNode*)pNode); 
+void destoryExchangeLogicNode(SNode* pNode) {
+  destroyLogicNode((SLogicNode*)pNode);
 }
 
 void destoryMergeLogicNode(SNode* pNode) {
@@ -7221,10 +7233,10 @@ void destoryLogicSubplan(SNode* pNode) {
 }
 
 void destoryQueryLogicPlan(SNode* pNode) {
-  nodesDestroyList(((SQueryLogicPlan*)pNode)->pTopSubplans); 
+  nodesDestroyList(((SQueryLogicPlan*)pNode)->pTopSubplans);
 }
 
-void destroyScanPhysiNode(SNode* pInput) { 
+void destroyScanPhysiNode(SNode* pInput) {
   SScanPhysiNode* pNode = (SScanPhysiNode*)pInput;
   destroyPhysiNode(pInput);
   nodesDestroyList(pNode->pScanCols);
@@ -7412,7 +7424,7 @@ void destorySubplanNode(SNode* pNode) {
 }
 
 void destoryPlanNode(SNode* pNode) {
-  nodesDestroyList(((SQueryPlan*)pNode)->pSubplans); 
+  nodesDestroyList(((SQueryPlan*)pNode)->pSubplans);
 }
 
 void nodesDestroyNode(SNode* pNode) {
@@ -7439,8 +7451,8 @@ static void doInitNodeFuncArray() {
   setFunc("Column",
       QUERY_NODE_COLUMN,
       sizeof(SColumnNode),
-      columnNodeToJson, 
-      jsonToColumnNode, 
+      columnNodeToJson,
+      jsonToColumnNode,
       destroyColumnNode
     );
   setFunc("Value",
@@ -7903,6 +7915,20 @@ static void doInitNodeFuncArray() {
      sizeof(SDropComponentNodeStmt),
      dropMnodeStmtToJson,
      jsonToDropMnodeStmt,
+     destoryXNode
+   );
+  setFunc("CreateArbitratorStmt",
+     QUERY_NODE_CREATE_ARBITRATOR_STMT,
+     sizeof(SCreateComponentNodeStmt),
+     createArbitratorStmtToJson,
+     jsonToCreateArbitratorStmt,
+     destoryXNode
+   );
+  setFunc("DropArbitratorStmt",
+     QUERY_NODE_DROP_ARBITRATOR_STMT,
+     sizeof(SDropComponentNodeStmt),
+     dropArbitratorStmtToJson,
+     jsonToDropArbitratorStmt,
      destoryXNode
    );
   setFunc("CreateTopicStmt",

@@ -39,6 +39,8 @@ const char *dmNodeName(EDndNodeType ntype) {
       return "snode";
     case MNODE:
       return "mnode";
+    case ARBITRATOR:
+      return "arbitrator";
     default:
       return "dnode";
   }

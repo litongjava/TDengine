@@ -36,6 +36,7 @@
 #include "mnode.h"
 #include "monitor.h"
 #include "qnode.h"
+#include "arbitrator.h"
 #include "sync.h"
 #include "tfs.h"
 #include "wal.h"
@@ -68,7 +69,8 @@ typedef enum {
   VNODE = 2,
   QNODE = 3,
   SNODE = 4,
-  NODE_END = 5,
+  ARBITRATOR = 5,
+  NODE_END = 6,
 } EDndNodeType;
 
 typedef enum {

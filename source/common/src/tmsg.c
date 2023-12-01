@@ -2288,13 +2288,9 @@ int32_t tDeserializeSCreateDropMQSNodeReq(void *buf, int32_t bufLen, SMCreateQno
   return 0;
 }
 
-void tFreeSMCreateQnodeReq(SMCreateQnodeReq *pReq){
-  FREESQL();
-}
+void tFreeSMCreateQnodeReq(SMCreateQnodeReq *pReq) { FREESQL(); }
 
-void    tFreeSDDropQnodeReq(SDDropQnodeReq* pReq) {
-  FREESQL();
-}
+void tFreeSDDropQnodeReq(SDDropQnodeReq *pReq) { FREESQL(); }
 
 int32_t tSerializeSDropDnodeReq(void *buf, int32_t bufLen, SDropDnodeReq *pReq) {
   SEncoder encoder = {0};
@@ -8872,7 +8868,7 @@ void    tFreeSCMCreateViewReq(SCMCreateViewReq* pReq) {
   }
 
   taosMemoryFreeClear(pReq->querySql);
-  taosMemoryFreeClear(pReq->sql);  
+  taosMemoryFreeClear(pReq->sql);
   taosMemoryFreeClear(pReq->pSchema);
 }
 
@@ -8914,7 +8910,7 @@ void    tFreeSCMDropViewReq(SCMDropViewReq* pReq) {
   if (NULL == pReq) {
     return;
   }
-  
+
   taosMemoryFree(pReq->sql);
 }
 
@@ -9086,7 +9082,3 @@ void tFreeSViewHbRsp(SViewHbRsp *pRsp) {
 
   taosArrayDestroy(pRsp->pViewRsp);
 }
-
-
-
-

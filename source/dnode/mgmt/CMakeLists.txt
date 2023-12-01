@@ -4,6 +4,7 @@ add_subdirectory(mgmt_mnode)
 add_subdirectory(mgmt_qnode)
 add_subdirectory(mgmt_snode)
 add_subdirectory(mgmt_vnode)
+add_subdirectory(mgmt_arbitrator)
 add_subdirectory(mgmt_dnode)
 add_subdirectory(test)
 
@@ -27,4 +28,3 @@ IF (TD_LINUX_64 AND JEMALLOC_ENABLED)
 ELSE ()
     target_link_libraries(taosd dnode)
 ENDIF ()
-

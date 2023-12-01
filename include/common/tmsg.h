@@ -346,9 +346,11 @@ typedef enum ENodeType {
   QUERY_NODE_RESTORE_MNODE_STMT,
   QUERY_NODE_RESTORE_VNODE_STMT,
   QUERY_NODE_PAUSE_STREAM_STMT,
-  QUERY_NODE_RESUME_STREAM_STMT,  
+  QUERY_NODE_RESUME_STREAM_STMT,
   QUERY_NODE_CREATE_VIEW_STMT,
   QUERY_NODE_DROP_VIEW_STMT,
+  QUERY_NODE_CREATE_ARBITRATOR_STMT,
+  QUERY_NODE_DROP_ARBITRATOR_STMT,
 
   // logic plan node
   QUERY_NODE_LOGIC_PLAN_SCAN = 1000,
@@ -979,7 +981,7 @@ typedef struct {
   SHashObj* alterTbs;
   SHashObj* readViews;
   SHashObj* writeViews;
-  SHashObj* alterViews;  
+  SHashObj* alterViews;
   SHashObj* useDbs;
   int64_t whiteListVer;
 } SGetUserAuthRsp;
@@ -2034,7 +2036,8 @@ typedef struct {
   int32_t sqlLen;
   char*   sql;
 } SMCreateMnodeReq, SMDropMnodeReq, SDDropMnodeReq, SMCreateQnodeReq, SMDropQnodeReq, SDCreateQnodeReq, SDDropQnodeReq,
-    SMCreateSnodeReq, SMDropSnodeReq, SDCreateSnodeReq, SDDropSnodeReq;
+    SMCreateSnodeReq, SMDropSnodeReq, SDCreateSnodeReq, SDDropSnodeReq,
+    SMCreateArbitratorReq, SMDropArbitratorReq, SDCreateArbitratorReq, SDDropArbitratorReq;
 
 int32_t tSerializeSCreateDropMQSNodeReq(void* buf, int32_t bufLen, SMCreateQnodeReq* pReq);
 int32_t tDeserializeSCreateDropMQSNodeReq(void* buf, int32_t bufLen, SMCreateQnodeReq* pReq);

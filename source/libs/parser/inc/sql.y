@@ -197,6 +197,10 @@ cmd ::= RESTORE MNODE ON DNODE NK_INTEGER(A).                                   
 /************************************************ restore vnode ***************************************************/
 cmd ::= RESTORE VNODE ON DNODE NK_INTEGER(A).                                     { pCxt->pRootNode = createRestoreComponentNodeStmt(pCxt, QUERY_NODE_RESTORE_VNODE_STMT, &A); }
 
+/************************************************ create/drop arbitrator ***************************************************/
+cmd ::= CREATE ARBITRATOR ON DNODE NK_INTEGER(A).                                 { pCxt->pRootNode = createCreateComponentNodeStmt(pCxt, QUERY_NODE_CREATE_ARBITRATOR_STMT, &A); }
+cmd ::= DROP ARBITRATOR ON DNODE NK_INTEGER(A).                                   { pCxt->pRootNode = createDropComponentNodeStmt(pCxt, QUERY_NODE_DROP_ARBITRATOR_STMT, &A); }
+
 /************************************************ create/drop/use database ********************************************/
 cmd ::= CREATE DATABASE not_exists_opt(A) db_name(B) db_options(C).               { pCxt->pRootNode = createCreateDatabaseStmt(pCxt, A, &B, C); }
 cmd ::= DROP DATABASE exists_opt(A) db_name(B).                                   { pCxt->pRootNode = createDropDatabaseStmt(pCxt, A, &B); }
@@ -474,6 +478,7 @@ cmd ::= SHOW db_name_cond_opt(A) VGROUPS.                                       
 cmd ::= SHOW MNODES.                                                              { pCxt->pRootNode = createShowStmt(pCxt, QUERY_NODE_SHOW_MNODES_STMT); }
 //cmd ::= SHOW MODULES.                                                             { pCxt->pRootNode = createShowStmt(pCxt, QUERY_NODE_SHOW_MODULES_STMT); }
 cmd ::= SHOW QNODES.                                                              { pCxt->pRootNode = createShowStmt(pCxt, QUERY_NODE_SHOW_QNODES_STMT); }
+//cmd ::= SHOW ARBITRATOR.                                                          { pCxt->pRootNode = createShowStmt(pCxt, QUERY_NODE_SHOW_ARBITRATOR_STMT); }
 cmd ::= SHOW FUNCTIONS.                                                           { pCxt->pRootNode = createShowStmt(pCxt, QUERY_NODE_SHOW_FUNCTIONS_STMT); }
 cmd ::= SHOW INDEXES FROM table_name_cond(A) from_db_opt(B).                      { pCxt->pRootNode = createShowStmtWithCond(pCxt, QUERY_NODE_SHOW_INDEXES_STMT, B, A, OP_TYPE_EQUAL); }
 cmd ::= SHOW INDEXES FROM db_name(B) NK_DOT table_name(A).                        { pCxt->pRootNode = createShowStmtWithCond(pCxt, QUERY_NODE_SHOW_INDEXES_STMT, createIdentifierValueNode(pCxt, &B), createIdentifierValueNode(pCxt, &A), OP_TYPE_EQUAL); }
@@ -520,7 +525,7 @@ table_kind_db_name_cond_opt(A) ::= db_name(C) NK_DOT.                           
 table_kind_db_name_cond_opt(A) ::= table_kind(B) db_name(C) NK_DOT.               { A.kind = B; A.dbName = C; }
 
 %type table_kind                                                                  { EShowKind }
-%destructor table_kind                                                            { }   
+%destructor table_kind                                                            { }
 table_kind(A) ::= NORMAL.                                                         { A = SHOW_KIND_TABLES_NORMAL; }
 table_kind(A) ::= CHILD.                                                          { A = SHOW_KIND_TABLES_CHILD; }
 

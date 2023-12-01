@@ -260,7 +260,7 @@ typedef enum ELogicConditionType {
 #define TSDB_PASSWORD_LEN      32
 #define TSDB_USET_PASSWORD_LEN 129
 #define TSDB_VERSION_LEN       32
-#define TSDB_LABEL_LEN         12 
+#define TSDB_LABEL_LEN         12
 #define TSDB_JOB_STATUS_LEN    32
 
 #define TSDB_CLUSTER_ID_LEN       40
@@ -509,12 +509,13 @@ enum {
   SND_WORKER_TYPE__UNIQUE,
 };
 
-#define DEFAULT_HANDLE 0
-#define MNODE_HANDLE   1
-#define QNODE_HANDLE   -1
-#define SNODE_HANDLE   -2
-#define VNODE_HANDLE   -3
-#define CLIENT_HANDLE  -5
+#define DEFAULT_HANDLE    0
+#define MNODE_HANDLE      1
+#define QNODE_HANDLE      -1
+#define SNODE_HANDLE      -2
+#define VNODE_HANDLE      -3
+#define ARBITRATOR_HANDLE -4
+#define CLIENT_HANDLE     -5
 
 #define TSDB_CONFIG_OPTION_LEN 32
 #define TSDB_CONFIG_VALUE_LEN  64
