@@ -86,6 +86,8 @@ enum { // WARN: new msg should be appended to segment tail
   TD_DEF_MSG_TYPE(TDMT_DND_ALTER_MNODE_TYPE, "dnode-alter-mnode-type", NULL, NULL)
   TD_DEF_MSG_TYPE(TDMT_DND_ALTER_VNODE_TYPE, "dnode-alter-vnode-type", NULL, NULL)
   TD_DEF_MSG_TYPE(TDMT_DND_CHECK_VNODE_LEARNER_CATCHUP, "dnode-check-vnode-learner-catchup", NULL, NULL)
+  TD_DEF_MSG_TYPE(TDMT_DND_CREATE_ARBITRATOR, "dnode-create-arbitrator", NULL, NULL)
+  TD_DEF_MSG_TYPE(TDMT_DND_DROP_ARBITRATOR, "dnode-drop-arbitrator", NULL, NULL)
 
   TD_NEW_MSG_SEG(TDMT_MND_MSG)  // 1<<8
   TD_DEF_MSG_TYPE(TDMT_MND_CONNECT, "connect", NULL, NULL)

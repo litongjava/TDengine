@@ -76,6 +76,8 @@ typedef enum {
   MND_OPER_DROP_TOPIC,
   MND_OPER_CREATE_VIEW,
   MND_OPER_DROP_VIEW,
+  MND_OPER_CREATE_ARBITRATOR,
+  MND_OPER_DROP_ARBITRATOR,
 } EOperType;
 
 typedef enum {
@@ -245,6 +247,13 @@ typedef struct {
   int64_t    updateTime;
   SDnodeObj* pDnode;
 } SSnodeObj;
+
+typedef struct {
+  int32_t    id;
+  int64_t    createdTime;
+  int64_t    updateTime;
+  SDnodeObj* pDnode;
+} SArbitratorObj;
 
 typedef struct {
   int32_t maxUsers;
@@ -731,7 +740,7 @@ typedef struct {
   int8_t   type;
   int32_t  numOfCols;
   SSchema* pSchema;
-  SRWLatch lock;  
+  SRWLatch lock;
 } SViewObj;
 
 int32_t tEncodeSViewObj(SEncoder* pEncoder, const SViewObj* pObj);
