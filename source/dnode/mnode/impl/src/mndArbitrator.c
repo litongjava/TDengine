@@ -189,10 +189,6 @@ int32_t mndSetCreateArbitratorCommitLogs(STrans *pTrans, SArbitratorObj *pObj) {
   return 0;
 }
 
-bool mndArbitratorInDnode(SArbitratorObj *pArbitrator, int32_t dnodeId) {
-  return pArbitrator->pDnode->id == dnodeId;
-}
-
 int32_t mndSetCreateArbitratorRedoActions(STrans *pTrans, SDnodeObj *pDnode, SArbitratorObj *pObj) {
   SDCreateArbitratorReq createReq = {0};
   createReq.dnodeId = pDnode->id;

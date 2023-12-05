@@ -112,7 +112,7 @@ static void *dmCrashReportThreadFp(void *param) {
   int32_t sleepTime = 200;
   int32_t reportPeriodNum = 3600 * 1000 / sleepTime;;
   int32_t loopTimes = reportPeriodNum;
-  
+
   while (1) {
     if (pMgmt->pData->dropped || pMgmt->pData->stopped) break;
     if (loopTimes++ < reportPeriodNum) {
@@ -146,13 +146,13 @@ static void *dmCrashReportThreadFp(void *param) {
       pMsg = NULL;
       continue;
     }
-    
+
     if (pFile) {
       taosReleaseCrashLogFile(pFile, truncateFile);
       pFile = NULL;
       truncateFile = false;
     }
-    
+
     taosMsleep(sleepTime);
     loopTimes = 0;
   }
@@ -290,6 +290,12 @@ static void dmProcessMgmtQueue(SQueueInfo *pInfo, SRpcMsg *pMsg) {
       break;
     case TDMT_DND_ALTER_MNODE_TYPE:
       code = (*pMgmt->processAlterNodeTypeFp)(MNODE, pMsg);
+      break;
+    case TDMT_DND_CREATE_ARBITRATOR:
+      code = (*pMgmt->processCreateNodeFp)(ARBITRATOR, pMsg);
+      break;
+    case TDMT_DND_DROP_ARBITRATOR:
+      code = (*pMgmt->processDropNodeFp)(ARBITRATOR, pMsg);
       break;
     case TDMT_DND_SERVER_STATUS:
       code = dmProcessServerRunStatus(pMgmt, pMsg);

@@ -31,7 +31,6 @@ SArbitratorObj *mndAcquireArbitrator(SMnode *pMnode, int32_t arbitratorId);
 void            mndReleaseArbitrator(SMnode *pMnode, SArbitratorObj *pObj);
 // int32_t         mndCreateArbitratorList(SMnode *pMnode, SArray **pList, int32_t limit);
 int32_t         mndSetDropArbitratorInfoToTrans(SMnode *pMnode, STrans *pTrans, SArbitratorObj *pObj, bool force);
-bool            mndArbitratorInDnode(SArbitratorObj *pArbitrator, int32_t dnodeId);
 int32_t         mndSetCreateArbitratorCommitLogs(STrans *pTrans, SArbitratorObj *pObj);
 int32_t         mndSetCreateArbitratorRedoActions(STrans *pTrans, SDnodeObj *pDnode, SArbitratorObj *pObj);
 
