@@ -297,6 +297,7 @@ static SKeyword keywordTable[] = {
     {"VARBINARY",            TK_VARBINARY},
     {"KEEP_TIME_OFFSET",     TK_KEEP_TIME_OFFSET},
     {"ARBITRATOR",           TK_ARBITRATOR},
+    {"ARBITRATORS",          TK_ARBITRATORS},
 };
 // clang-format on
 

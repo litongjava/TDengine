@@ -33,8 +33,8 @@ static int32_t  mndArbitratorActionDelete(SSdb *pSdb, SArbitratorObj *pObj);
 static int32_t  mndProcessCreateArbitratorReq(SRpcMsg *pReq);
 static int32_t  mndProcessDropArbitratorReq(SRpcMsg *pReq);
 // static int32_t  mndProcessArbitratorListReq(SRpcMsg *pReq);
-// static int32_t  mndRetrieveArbitrators(SRpcMsg *pReq, SShowObj *pShow, SSDataBlock *pBlock, int32_t rows);
-// static void     mndCancelGetNextArbitrator(SMnode *pMnode, void *pIter);
+static int32_t  mndRetrieveArbitrators(SRpcMsg *pReq, SShowObj *pShow, SSDataBlock *pBlock, int32_t rows);
+static void     mndCancelGetNextArbitrator(SMnode *pMnode, void *pIter);
 
 int32_t mndInitArbitrator(SMnode *pMnode) {
   SSdbTable table = {
@@ -53,8 +53,8 @@ int32_t mndInitArbitrator(SMnode *pMnode) {
   mndSetMsgHandle(pMnode, TDMT_DND_DROP_ARBITRATOR_RSP, mndTransProcessRsp);
   //mndSetMsgHandle(pMnode, TDMT_MND_ARBITRATOR_LIST, mndProcessArbitratorListReq);
 
-  // mndAddShowRetrieveHandle(pMnode, TSDB_MGMT_TABLE_ARBITRATOR, mndRetrieveArbitrators);
-  // mndAddShowFreeIterHandle(pMnode, TSDB_MGMT_TABLE_ARBITRATOR, mndCancelGetNextArbitrator);
+  mndAddShowRetrieveHandle(pMnode, TSDB_MGMT_TABLE_ARBITRATOR, mndRetrieveArbitrators);
+  mndAddShowFreeIterHandle(pMnode, TSDB_MGMT_TABLE_ARBITRATOR, mndCancelGetNextArbitrator);
 
   return sdbSetTable(pMnode->pSdb, table);
 }
@@ -506,40 +506,40 @@ _OVER:
 //   return code;
 // }
 
-// static int32_t mndRetrieveArbitrators(SRpcMsg *pReq, SShowObj *pShow, SSDataBlock *pBlock, int32_t rows) {
-//   SMnode    *pMnode = pReq->info.node;
-//   SSdb      *pSdb = pMnode->pSdb;
-//   int32_t    numOfRows = 0;
-//   int32_t    cols = 0;
-//   SArbitratorObj *pObj = NULL;
-//   char      *pWrite;
+static int32_t mndRetrieveArbitrators(SRpcMsg *pReq, SShowObj *pShow, SSDataBlock *pBlock, int32_t rows) {
+  SMnode    *pMnode = pReq->info.node;
+  SSdb      *pSdb = pMnode->pSdb;
+  int32_t    numOfRows = 0;
+  int32_t    cols = 0;
+  SArbitratorObj *pObj = NULL;
+  char      *pWrite;
 
-//   while (numOfRows < rows) {
-//     pShow->pIter = sdbFetch(pSdb, SDB_ARBITRATOR, pShow->pIter, (void **)&pObj);
-//     if (pShow->pIter == NULL) break;
+  while (numOfRows < rows) {
+    pShow->pIter = sdbFetch(pSdb, SDB_ARBITRATOR, pShow->pIter, (void **)&pObj);
+    if (pShow->pIter == NULL) break;
 
-//     cols = 0;
-//     SColumnInfoData *pColInfo = taosArrayGet(pBlock->pDataBlock, cols++);
-//     colDataSetVal(pColInfo, numOfRows, (const char *)&pObj->id, false);
+    cols = 0;
+    SColumnInfoData *pColInfo = taosArrayGet(pBlock->pDataBlock, cols++);
+    colDataSetVal(pColInfo, numOfRows, (const char *)&pObj->id, false);
 
-//     char ep[TSDB_EP_LEN + VARSTR_HEADER_SIZE] = {0};
-//     STR_WITH_MAXSIZE_TO_VARSTR(ep, pObj->pDnode->ep, pShow->pMeta->pSchemas[cols].bytes);
-//     pColInfo = taosArrayGet(pBlock->pDataBlock, cols++);
-//     colDataSetVal(pColInfo, numOfRows, (const char *)ep, false);
+    char ep[TSDB_EP_LEN + VARSTR_HEADER_SIZE] = {0};
+    STR_WITH_MAXSIZE_TO_VARSTR(ep, pObj->pDnode->ep, pShow->pMeta->pSchemas[cols].bytes);
+    pColInfo = taosArrayGet(pBlock->pDataBlock, cols++);
+    colDataSetVal(pColInfo, numOfRows, (const char *)ep, false);
 
-//     pColInfo = taosArrayGet(pBlock->pDataBlock, cols++);
-//     colDataSetVal(pColInfo, numOfRows, (const char *)&pObj->createdTime, false);
+    pColInfo = taosArrayGet(pBlock->pDataBlock, cols++);
+    colDataSetVal(pColInfo, numOfRows, (const char *)&pObj->createdTime, false);
 
-//     numOfRows++;
-//     sdbRelease(pSdb, pObj);
-//   }
+    numOfRows++;
+    sdbRelease(pSdb, pObj);
+  }
 
-//   pShow->numOfRows += numOfRows;
+  pShow->numOfRows += numOfRows;
 
-//   return numOfRows;
-// }
+  return numOfRows;
+}
 
-// static void mndCancelGetNextArbitrator(SMnode *pMnode, void *pIter) {
-//   SSdb *pSdb = pMnode->pSdb;
-//   sdbCancelFetch(pSdb, pIter);
-// }
+static void mndCancelGetNextArbitrator(SMnode *pMnode, void *pIter) {
+  SSdb *pSdb = pMnode->pSdb;
+  sdbCancelFetch(pSdb, pIter);
+}

@@ -69,6 +69,12 @@ static const SSysDbTableSchema snodesSchema[] = {
     {.name = "create_time", .bytes = 8, .type = TSDB_DATA_TYPE_TIMESTAMP, .sysInfo = true},
 };
 
+static const SSysDbTableSchema arbitratorsSchema[] = {
+    {.name = "id", .bytes = 4, .type = TSDB_DATA_TYPE_INT, .sysInfo = true},
+    {.name = "endpoint", .bytes = TSDB_EP_LEN + VARSTR_HEADER_SIZE, .type = TSDB_DATA_TYPE_VARCHAR, .sysInfo = true},
+    {.name = "create_time", .bytes = 8, .type = TSDB_DATA_TYPE_TIMESTAMP, .sysInfo = true},
+};
+
 static const SSysDbTableSchema clusterSchema[] = {
     {.name = "id", .bytes = 8, .type = TSDB_DATA_TYPE_BIGINT, .sysInfo = true},
     {.name = "name", .bytes = TSDB_CLUSTER_ID_LEN + VARSTR_HEADER_SIZE, .type = TSDB_DATA_TYPE_VARCHAR, .sysInfo = true},
@@ -362,6 +368,7 @@ static const SSysTableMeta infosMeta[] = {
     {TSDB_INS_TABLE_VNODES, vnodesSchema, tListLen(vnodesSchema), true},
     {TSDB_INS_TABLE_USER_PRIVILEGES, userUserPrivilegesSchema, tListLen(userUserPrivilegesSchema), true},
     {TSDB_INS_TABLE_VIEWS, userViewsSchema, tListLen(userViewsSchema), false},
+    {TSDB_INS_TABLE_ARBITRATORS, arbitratorsSchema, tListLen(arbitratorsSchema), true},
 };
 
 static const SSysDbTableSchema connectionsSchema[] = {

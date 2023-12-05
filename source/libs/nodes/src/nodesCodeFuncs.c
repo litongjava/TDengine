@@ -6151,6 +6151,10 @@ static int32_t showQnodesStmtToJson(const void* pObj, SJson* pJson) { return sho
 
 static int32_t jsonToShowQnodesStmt(const SJson* pJson, void* pObj) { return jsonToShowStmt(pJson, pObj); }
 
+static int32_t showArbitratorsStmtToJson(const void* pObj, SJson* pJson) { return showStmtToJson(pObj, pJson); }
+
+static int32_t jsonToShowArbitratorsStmt(const SJson* pJson, void* pObj) { return jsonToShowStmt(pJson, pObj); }
+
 static int32_t showClusterStmtToJson(const void* pObj, SJson* pJson) { return showStmtToJson(pObj, pJson); }
 
 static int32_t jsonToShowClusterStmt(const SJson* pJson, void* pObj) { return jsonToShowStmt(pJson, pObj); }
@@ -8125,6 +8129,13 @@ static void doInitNodeFuncArray() {
      sizeof(SShowStmt),
      emptyNodeToJson,
      emptyJsonToNode,
+     destoryShowStmt
+   );
+  setFunc("ShowArbitratorsStmt",
+     QUERY_NODE_SHOW_ARBITRATORS_STMT,
+     sizeof(SShowStmt),
+     showArbitratorsStmtToJson,
+     jsonToShowArbitratorsStmt,
      destoryShowStmt
    );
   setFunc("ShowClusterStmt",
