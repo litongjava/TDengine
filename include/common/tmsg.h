@@ -322,6 +322,8 @@ typedef enum ENodeType {
   QUERY_NODE_RESUME_STREAM_STMT,
   QUERY_NODE_CREATE_VIEW_STMT,
   QUERY_NODE_DROP_VIEW_STMT,
+  QUERY_NODE_CREATE_ARBITRATOR_STMT,
+  QUERY_NODE_DROP_ARBITRATOR_STMT,
 
   // show statement nodes
   // see 'sysTableShowAdapter', 'SYSTABLE_SHOW_TYPE_OFFSET'
@@ -1141,6 +1143,7 @@ typedef struct {
   int32_t tsdbPageSize;
   int32_t sqlLen;
   char*   sql;
+  int8_t  withArbitrator;
 } SCreateDbReq;
 
 int32_t tSerializeSCreateDbReq(void* buf, int32_t bufLen, SCreateDbReq* pReq);
@@ -1291,6 +1294,7 @@ typedef struct {
   SArray* pRetensions;
   int8_t  schemaless;
   int16_t sstTrigger;
+  int8_t  withArbitrator;
 } SDbCfgRsp;
 
 typedef SDbCfgRsp SDbCfgInfo;

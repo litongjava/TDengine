@@ -351,6 +351,7 @@ typedef struct {
   int32_t walRollPeriod;
   int64_t walRetentionSize;
   int64_t walSegmentSize;
+  int8_t  withArbitrator;
 } SDbCfg;
 
 typedef struct {

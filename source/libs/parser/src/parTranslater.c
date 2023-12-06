@@ -4777,6 +4777,7 @@ static int32_t buildCreateDbReq(STranslateContext* pCxt, SCreateDatabaseStmt* pS
   pReq->tsdbPageSize = pStmt->pOptions->tsdbPageSize;
   pReq->keepTimeOffset = pStmt->pOptions->keepTimeOffset;
   pReq->ignoreExist = pStmt->ignoreExists;
+  pReq->withArbitrator = pStmt->pOptions->withArbitrator;
   return buildCreateDbRetentions(pStmt->pOptions->pRetentions, pReq);
 }
 
@@ -5078,6 +5079,12 @@ static int32_t checkOptionsDependency(STranslateContext* pCxt, const char* pDbNa
     return generateSyntaxErrMsgExt(&pCxt->msgBuf, TSDB_CODE_PAR_INVALID_DB_OPTION,
                                    "Invalid duration value, should be keep2 >= keep1 >= keep0 >= 3 * duration");
   }
+
+  if ((pOptions->replica == 2) ^ (pOptions->withArbitrator == true)) {
+    return generateSyntaxErrMsgExt(&pCxt->msgBuf, TSDB_CODE_PAR_INVALID_DB_OPTION,
+                                   "Invalid database option, with_arbitrator should be used with replica 2");
+  }
+
   return TSDB_CODE_SUCCESS;
 }
 
@@ -5130,7 +5137,7 @@ static int32_t checkDatabaseOptions(STranslateContext* pCxt, const char* pDbName
                               TSDB_MAX_TSDB_PAGESIZE);
   }
   if (TSDB_CODE_SUCCESS == code) {
-    code = checkDbEnumOption(pCxt, "replications", pOptions->replica, TSDB_MIN_DB_REPLICA, TSDB_MAX_DB_REPLICA);
+    code = checkDbRangeOption(pCxt, "replications", pOptions->replica, TSDB_MIN_DB_REPLICA, TSDB_MAX_DB_REPLICA);
   }
   if (TSDB_CODE_SUCCESS == code) {
     code = checkDbStrictOption(pCxt, pOptions);
@@ -5168,6 +5175,10 @@ static int32_t checkDatabaseOptions(STranslateContext* pCxt, const char* pDbName
   }
   if (TSDB_CODE_SUCCESS == code) {
     code = checkDbRangeOption(pCxt, "sstTrigger", pOptions->sstTrigger, TSDB_MIN_STT_TRIGGER, TSDB_MAX_STT_TRIGGER);
+  }
+  if (TSDB_CODE_SUCCESS == code) {
+    code = checkDbEnumOption(pCxt, "withArbitrator", pOptions->withArbitrator, TSDB_MIN_DB_WITH_ARBITRATOR,
+                             TSDB_MAX_DB_WITH_ARBITRATOR);
   }
   if (TSDB_CODE_SUCCESS == code) {
     code = checkDbTbPrefixSuffixOptions(pCxt, pOptions->tablePrefix, pOptions->tableSuffix);
