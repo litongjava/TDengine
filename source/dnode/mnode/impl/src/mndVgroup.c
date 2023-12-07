@@ -19,6 +19,7 @@
 #include "mndDb.h"
 #include "mndDnode.h"
 #include "mndMnode.h"
+#include "mndArbitrator.h"
 #include "mndPrivilege.h"
 #include "mndShow.h"
 #include "mndStb.h"
@@ -328,6 +329,19 @@ void *mndBuildCreateVnodeReq(SMnode *pMnode, SDnodeObj *pDnode, SDbObj *pDb, SVg
     }
   }
 
+  SArbitrator *pArbitrator = &createReq.arbitrator;
+  pArbitrator->arbitratorId = pVgroup->arbitratorId;
+  if (pVgroup->arbitratorId != -1) {
+    SArbitratorObj *pVgArbitrator = mndAcquireArbitrator(pMnode, pVgroup->arbitratorId);
+    if (pVgArbitrator == NULL) {
+      return NULL;
+    }
+
+    pArbitrator->port = pVgArbitrator->pDnode->port;
+    memcpy(pArbitrator->fqdn, pVgArbitrator->pDnode->fqdn, TSDB_FQDN_LEN);
+    mndReleaseArbitrator(pMnode, pVgArbitrator);
+  }
+
   if (createReq.selfIndex == -1 && createReq.learnerSelfIndex == -1) {
     terrno = TSDB_CODE_APP_ERROR;
     return NULL;
@@ -346,6 +360,10 @@ void *mndBuildCreateVnodeReq(SMnode *pMnode, SDnodeObj *pDnode, SDbObj *pDb, SVg
   for (int32_t i = 0; i < createReq.learnerReplica; ++i) {
     mInfo("vgId:%d, replica:%d ep:%s:%u", createReq.vgId, i, createReq.learnerReplicas[i].fqdn,
           createReq.learnerReplicas[i].port);
+  }
+  if (createReq.arbitrator.arbitratorId != -1) {
+    mInfo("vgId:%d, arbitratorId:%d ep:%s:%u", createReq.vgId, createReq.arbitrator.arbitratorId,
+          createReq.arbitrator.fqdn, createReq.arbitrator.port);
   }
 
   int32_t contLen = tSerializeSCreateVnodeReq(NULL, 0, &createReq);
@@ -846,6 +864,11 @@ int32_t mndAllocVgroup(SMnode *pMnode, SDbObj *pDb, SVgObj **ppVgroups) {
 
     if (mndGetAvailableDnode(pMnode, pDb, pVgroup, pArray) != 0) {
       goto _OVER;
+    }
+
+    pVgroup->arbitratorId = -1;
+    if (pDb->cfg.withArbitrator) {
+      pVgroup->arbitratorId = 1;
     }
 
     allocedVgroups++;

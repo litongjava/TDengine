@@ -382,27 +382,28 @@ typedef struct {
 } SVnodeGid;
 
 typedef struct {
-  int32_t   vgId;
-  int64_t   createdTime;
-  int64_t   updateTime;
-  int32_t   version;
-  uint32_t  hashBegin;
-  uint32_t  hashEnd;
-  char      dbName[TSDB_DB_FNAME_LEN];
-  int64_t   dbUid;
-  int64_t   cacheUsage;
-  int64_t   numOfTables;
-  int64_t   numOfTimeSeries;
-  int64_t   totalStorage;
-  int64_t   compStorage;
-  int64_t   pointsWritten;
-  int8_t    compact;
-  int8_t    isTsma;
-  int8_t    replica;
-  SVnodeGid vnodeGid[TSDB_MAX_REPLICA + TSDB_MAX_LEARNER_REPLICA];
-  void*     pTsma;
-  int32_t   numOfCachedTables;
-  int32_t   syncConfChangeVer;
+  int32_t        vgId;
+  int64_t        createdTime;
+  int64_t        updateTime;
+  int32_t        version;
+  uint32_t       hashBegin;
+  uint32_t       hashEnd;
+  char           dbName[TSDB_DB_FNAME_LEN];
+  int64_t        dbUid;
+  int64_t        cacheUsage;
+  int64_t        numOfTables;
+  int64_t        numOfTimeSeries;
+  int64_t        totalStorage;
+  int64_t        compStorage;
+  int64_t        pointsWritten;
+  int8_t         compact;
+  int8_t         isTsma;
+  int8_t         replica;
+  SVnodeGid      vnodeGid[TSDB_MAX_REPLICA + TSDB_MAX_LEARNER_REPLICA];
+  void*          pTsma;
+  int32_t        numOfCachedTables;
+  int32_t        syncConfChangeVer;
+  int32_t        arbitratorId;
 } SVgObj;
 
 typedef struct {

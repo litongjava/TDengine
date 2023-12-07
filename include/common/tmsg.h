@@ -1618,6 +1618,12 @@ typedef struct {
 } SReplica;
 
 typedef struct {
+  int32_t  arbitratorId;
+  uint16_t port;                 // node arb Port
+  char     fqdn[TSDB_FQDN_LEN];  // node FQDN
+} SArbitrator;
+
+typedef struct {
   int32_t  vgId;
   char     db[TSDB_DB_FNAME_LEN];
   int64_t  dbUid;
@@ -1663,6 +1669,7 @@ typedef struct {
   int8_t   learnerSelfIndex;
   SReplica learnerReplicas[TSDB_MAX_LEARNER_REPLICA];
   int32_t  changeVersion;
+  SArbitrator arbitrator;
 } SCreateVnodeReq;
 
 int32_t tSerializeSCreateVnodeReq(void* buf, int32_t bufLen, SCreateVnodeReq* pReq);
