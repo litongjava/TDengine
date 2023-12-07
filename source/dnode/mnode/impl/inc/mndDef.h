@@ -206,6 +206,7 @@ typedef struct {
   int64_t    lastAccessTime;
   int32_t    accessTimes;
   int32_t    numOfVnodes;
+  int32_t    numOfArbitrators;
   int32_t    numOfOtherNodes;
   int32_t    numOfSupportVnodes;
   float      numOfCores;
@@ -250,6 +251,7 @@ typedef struct {
 
 typedef struct {
   int32_t    id;
+  int32_t    numOfVgroups;
   int64_t    createdTime;
   int64_t    updateTime;
   SDnodeObj* pDnode;

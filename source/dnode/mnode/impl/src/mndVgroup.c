@@ -329,7 +329,7 @@ void *mndBuildCreateVnodeReq(SMnode *pMnode, SDnodeObj *pDnode, SDbObj *pDb, SVg
     }
   }
 
-  SArbitrator *pArbitrator = &createReq.arbitrator;
+  SArbInfo *pArbitrator = &createReq.arbitrator;
   pArbitrator->arbitratorId = pVgroup->arbitratorId;
   if (pVgroup->arbitratorId != -1) {
     SArbitratorObj *pVgArbitrator = mndAcquireArbitrator(pMnode, pVgroup->arbitratorId);
@@ -732,6 +732,19 @@ static int32_t mndCompareDnodeVnodes(SDnodeObj *pDnode1, SDnodeObj *pDnode2) {
   return d1Score > d2Score ? 1 : -1;
 }
 
+static int32_t mndGetArbitratorScore(SArbitratorObj *pArbitrator) {
+  return pArbitrator->numOfVgroups;
+}
+
+static int32_t mndCompareDnodeArbitrators(SArbitratorObj *pArbitrator1, SArbitratorObj *pArbitrator2) {
+  int32_t arb1Score = mndGetArbitratorScore(pArbitrator1);
+  int32_t arb2Score = mndGetArbitratorScore(pArbitrator2);
+  if (arb1Score == arb2Score) {
+    return 0;
+  }
+  return arb1Score > arb2Score ? 1 : -1;
+}
+
 void mndSortVnodeGid(SVgObj *pVgroup) {
   for (int32_t i = 0; i < pVgroup->replica; ++i) {
     for (int32_t j = 0; j < pVgroup->replica - 1 - i; ++j) {
@@ -743,10 +756,6 @@ void mndSortVnodeGid(SVgObj *pVgroup) {
 }
 
 static int32_t mndGetAvailableDnode(SMnode *pMnode, SDbObj *pDb, SVgObj *pVgroup, SArray *pArray) {
-  SSdb   *pSdb = pMnode->pSdb;
-  int32_t allocedVnodes = 0;
-  void   *pIter = NULL;
-
   mDebug("start to sort %d dnodes", (int32_t)taosArrayGetSize(pArray));
   taosArraySort(pArray, (__compar_fn_t)mndCompareDnodeVnodes);
   for (int32_t i = 0; i < (int32_t)taosArrayGetSize(pArray); ++i) {
@@ -797,6 +806,27 @@ static int32_t mndGetAvailableDnode(SMnode *pMnode, SDbObj *pDb, SVgObj *pVgroup
   }
 
   mndSortVnodeGid(pVgroup);
+  return 0;
+}
+
+static int32_t mndGetAvailableArbitrator(SVgObj *pVgroup, SArray *pArray) {
+  mDebug("start to sort %d arbitrators", (int32_t)taosArrayGetSize(pArray));
+  taosArraySort(pArray, (__compar_fn_t)mndCompareDnodeArbitrators);
+  for (int32_t i = 0; i < (int32_t)taosArrayGetSize(pArray); ++i) {
+    SArbitratorObj *pArbitrator = taosArrayGet(pArray, i);
+    mDebug("arbitrator:%d, score:%d", pArbitrator->id, mndGetArbitratorScore(pArbitrator));
+  }
+
+  SArbitratorObj *pArbitrator = taosArrayGet(pArray, 0);
+  if (pArbitrator == NULL) {
+    terrno = TSDB_CODE_MND_NO_ENOUGH_DNODES;
+    return -1;
+  }
+  pVgroup->arbitratorId = pArbitrator->id;
+  mInfo("db:%s, vgId:%d, is alloced, arbitrator:%d", pVgroup->dbName, pVgroup->vgId, pVgroup->arbitratorId);
+  pArbitrator->numOfVgroups++;
+  pArbitrator->pDnode->numOfArbitrators++;
+
   return 0;
 }
 
@@ -868,7 +898,7 @@ int32_t mndAllocVgroup(SMnode *pMnode, SDbObj *pDb, SVgObj **ppVgroups) {
 
     pVgroup->arbitratorId = -1;
     if (pDb->cfg.withArbitrator) {
-      pVgroup->arbitratorId = 1;
+      //pVgroup->arbitratorId = mndGetAvailableArbitrator(pVgroup, pArbitratorArray);
     }
 
     allocedVgroups++;
