@@ -255,7 +255,7 @@ typedef struct {
   int64_t    createdTime;
   int64_t    updateTime;
   SDnodeObj* pDnode;
-} SArbitratorObj;
+} SArbObj;
 
 typedef struct {
   int32_t maxUsers;

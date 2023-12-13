@@ -334,6 +334,8 @@ enum { // WARN: new msg should be appended to segment tail
   TD_DEF_MSG_TYPE(TDMT_VND_TMQ_VG_COMMITTEDINFO, "vnode-tmq-committedinfo", NULL, NULL)
   TD_DEF_MSG_TYPE(TDMT_VND_TMQ_MAX_MSG, "vnd-tmq-max", NULL, NULL)
 
+  TD_NEW_MSG_SEG(TDMT_ARB_MSG)  //9 << 8
+  TD_DEF_MSG_TYPE(TDMT_ARB_REGISTER_VGROUP, "arbitrator-register", SMqRebVgReq, SMqRebVgRsp)
 
 #if defined(TD_MSG_NUMBER_)
   TDMT_MAX

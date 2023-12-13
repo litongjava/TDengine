@@ -16,53 +16,33 @@
 #define _DEFAULT_SOURCE
 #include "arbmInt.h"
 
-int32_t arbmProcessCreateReq(const SMgmtInputOpt *pInput, SRpcMsg *pMsg) {
-  SMCreateArbitratorReq createReq = {0};
-  if (tDeserializeSCreateDropMQSNodeReq(pMsg->pCont, pMsg->contLen, &createReq) != 0) {
+int32_t arbmProcessCreateReq(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg) {
+  SDCreateArbitratorReq createReq = {0};
+  if (tDeserializeSDCreateArbitratorReq(pMsg->pCont, pMsg->contLen, &createReq) != 0) {
     terrno = TSDB_CODE_INVALID_MSG;
     return -1;
   }
 
-  if (pInput->pData->dnodeId != 0 && createReq.dnodeId != pInput->pData->dnodeId) {
-    terrno = TSDB_CODE_INVALID_OPTION;
-    dError("failed to create arbitrator since %s", terrstr());
-    tFreeSMCreateQnodeReq(&createReq);
+  int32_t arbId = createReq.arbitratorId;
+
+  char path[TSDB_FILENAME_LEN] = {0};
+  snprintf(path, TSDB_FILENAME_LEN, "%s%sarbitrator%d", pMgmt->path, TD_DIRSEP, arbId);
+
+  if (arbitratorCreate(path, arbId) != 0) {
+    dError("arbitratorId:%d, failed to create arbitrator since %s", arbId, terrstr());
     return -1;
   }
 
-  bool deployed = true;
-  if (dmWriteFile(pInput->path, pInput->name, deployed) != 0) {
-    dError("failed to write arbitrator file since %s", terrstr());
-    tFreeSMCreateQnodeReq(&createReq);
-    return -1;
-  }
-
-  tFreeSMCreateQnodeReq(&createReq);
   return 0;
 }
 
-int32_t arbmProcessDropReq(const SMgmtInputOpt *pInput, SRpcMsg *pMsg) {
-  SMDropArbitratorReq dropReq = {0};
-  if (tDeserializeSCreateDropMQSNodeReq(pMsg->pCont, pMsg->contLen, &dropReq) != 0) {
+int32_t arbmProcessDropReq(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg) {
+  SDDropArbitratorReq dropReq = {0};
+  if (tDeserializeSDCreateArbitratorReq(pMsg->pCont, pMsg->contLen, &dropReq) != 0) {
     terrno = TSDB_CODE_INVALID_MSG;
     return -1;
   }
 
-  if (pInput->pData->dnodeId != 0 && dropReq.dnodeId != pInput->pData->dnodeId) {
-    terrno = TSDB_CODE_INVALID_OPTION;
-    dError("failed to drop arbitrator since %s", terrstr());
-    tFreeSMCreateQnodeReq(&dropReq);
-    return -1;
-  }
-
-  bool deployed = false;
-  if (dmWriteFile(pInput->path, pInput->name, deployed) != 0) {
-    dError("failed to write arbitrator file since %s", terrstr());
-    tFreeSMCreateQnodeReq(&dropReq);
-    return -1;
-  }
-
-  tFreeSMCreateQnodeReq(&dropReq);
   return 0;
 }
 
@@ -71,18 +51,10 @@ SArray *arbmGetMsgHandles() {
   SArray *pArray = taosArrayInit(16, sizeof(SMgmtHandle));
   if (pArray == NULL) goto _OVER;
 
-  // Requests handled by VNODE
-  if (dmSetMgmtHandle(pArray, TDMT_SCH_QUERY, arbmPutNodeMsgToQueryQueue, 1) == NULL) goto _OVER;
-  if (dmSetMgmtHandle(pArray, TDMT_SCH_MERGE_QUERY, arbmPutNodeMsgToQueryQueue, 1) == NULL) goto _OVER;
-  if (dmSetMgmtHandle(pArray, TDMT_SCH_QUERY_CONTINUE, arbmPutNodeMsgToQueryQueue, 1) == NULL) goto _OVER;
-  if (dmSetMgmtHandle(pArray, TDMT_SCH_FETCH, arbmPutNodeMsgToFetchQueue, 1) == NULL) goto _OVER;
-  if (dmSetMgmtHandle(pArray, TDMT_SCH_MERGE_FETCH, arbmPutNodeMsgToFetchQueue, 1) == NULL) goto _OVER;
-  if (dmSetMgmtHandle(pArray, TDMT_SCH_FETCH_RSP, arbmPutNodeMsgToFetchQueue, 1) == NULL) goto _OVER;
-  if (dmSetMgmtHandle(pArray, TDMT_SCH_QUERY_HEARTBEAT, arbmPutNodeMsgToFetchQueue, 1) == NULL) goto _OVER;
-
-  if (dmSetMgmtHandle(pArray, TDMT_SCH_CANCEL_TASK, arbmPutNodeMsgToFetchQueue, 1) == NULL) goto _OVER;
-  if (dmSetMgmtHandle(pArray, TDMT_SCH_DROP_TASK, arbmPutNodeMsgToFetchQueue, 1) == NULL) goto _OVER;
-  if (dmSetMgmtHandle(pArray, TDMT_SCH_TASK_NOTIFY, arbmPutNodeMsgToFetchQueue, 1) == NULL) goto _OVER;
+  // Requests handled by ARBITRATOR
+  // if (dmSetMgmtHandle(pArray, TDMT_ARB_REGISTER_VGROUP, arbmPutNodeMsgToQueue, 0) == NULL) goto _OVER;
+  if (dmSetMgmtHandle(pArray, TDMT_DND_CREATE_ARBITRATOR, arbmPutNodeMsgToQueue, 0) == NULL) goto _OVER;
+  if (dmSetMgmtHandle(pArray, TDMT_DND_DROP_ARBITRATOR, arbmPutNodeMsgToQueue, 0) == NULL) goto _OVER;
 
   code = 0;
 _OVER:

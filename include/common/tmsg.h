@@ -2052,7 +2052,7 @@ typedef struct {
   char*   sql;
 } SMCreateMnodeReq, SMDropMnodeReq, SDDropMnodeReq, SMCreateQnodeReq, SMDropQnodeReq, SDCreateQnodeReq, SDDropQnodeReq,
     SMCreateSnodeReq, SMDropSnodeReq, SDCreateSnodeReq, SDDropSnodeReq,
-    SMCreateArbitratorReq, SMDropArbitratorReq, SDCreateArbitratorReq, SDDropArbitratorReq;
+    SMCreateArbitratorReq, SMDropArbitratorReq;
 
 int32_t tSerializeSCreateDropMQSNodeReq(void* buf, int32_t bufLen, SMCreateQnodeReq* pReq);
 int32_t tDeserializeSCreateDropMQSNodeReq(void* buf, int32_t bufLen, SMCreateQnodeReq* pReq);
@@ -2068,6 +2068,14 @@ typedef struct {
 
 int32_t tSerializeSDCreateMnodeReq(void* buf, int32_t bufLen, SDCreateMnodeReq* pReq);
 int32_t tDeserializeSDCreateMnodeReq(void* buf, int32_t bufLen, SDCreateMnodeReq* pReq);
+
+typedef struct {
+  int32_t dnodeId;
+  int32_t arbitratorId;
+} SDCreateArbitratorReq, SDDropArbitratorReq;
+
+int32_t tSerializeSDCreateArbitratorReq(void* buf, int32_t bufLen, SDCreateArbitratorReq* pReq);
+int32_t tDeserializeSDCreateArbitratorReq(void* buf, int32_t bufLen, SDCreateArbitratorReq* pReq);
 
 typedef struct {
   char queryStrId[TSDB_QUERY_ID_LEN];
@@ -3961,6 +3969,29 @@ int32_t tSerializeSViewMetaRsp(void* buf, int32_t bufLen, const SViewMetaRsp* pR
 int32_t tDeserializeSViewMetaRsp(void* buf, int32_t bufLen, SViewMetaRsp* pRsp);
 void    tFreeSViewMetaRsp(SViewMetaRsp* pRsp);
 
+typedef struct {
+  int32_t openArbitrators;
+  int32_t totalArbitrators;
+} SArbitratorsStat;
+
+typedef struct {
+  int32_t  vgId;
+  int8_t   replica;
+  SReplica replicas[TSDB_MAX_REPLICA];
+  int8_t   learnerReplica;
+  SReplica learnerReplicas[TSDB_MAX_LEARNER_REPLICA];
+  int32_t  arbitratorId;
+} SRegisterToArbitratorReq;
+
+int32_t tSerializeSRegisterToArbitratorReq(void* buf, int32_t bufLen, SRegisterToArbitratorReq* pReq);
+int32_t tDeserializeSRegisterToArbitratorReq(void* buf, int32_t bufLen, SRegisterToArbitratorReq* pReq);
+int32_t tFreeSRegisterToArbitratorReq(SRegisterToArbitratorReq* pReq);
+
+typedef struct {
+} SUnregisterToArbitratorReq;
+
+int32_t tSerializeSUnregisterToArbitratorReq(void* buf, int32_t bufLen, SUnregisterToArbitratorReq* pReq);
+int32_t tDeserializeSUnregisterToArbitratorReq(void* buf, int32_t bufLen, SUnregisterToArbitratorReq* pReq);
 
 #pragma pack(pop)
 

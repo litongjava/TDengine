@@ -22,6 +22,7 @@
 #include "tmsg.h"
 #include "tmsgcb.h"
 #include "trpc.h"
+#include "tjson.h"
 
 #include "arbitrator.h"
 
@@ -29,13 +30,20 @@
 extern "C" {
 #endif
 
-typedef struct SQueueWorker SQHandle;
+typedef struct SArbitratorInfo SArbitratorInfo;
 
-typedef struct SArbitrator {
-  int32_t   arbId;
+#define ARB_INFO_FNAME     "arbitrator.json"
+#define ARB_INFO_FNAME_TMP "arbitrator_tmp.json"
+
+struct SArbitratorInfo {
+  int32_t arbitratorId;
+};
+
+struct SArbitrator {
+  int32_t arbitratorId;
   // SMsgCb    msgCb;
   // SQHandle* pQuery;
-} SArbitrator;
+};
 
 #ifdef __cplusplus
 }

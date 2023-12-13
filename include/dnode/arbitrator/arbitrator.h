@@ -22,36 +22,34 @@
 extern "C" {
 #endif
 
+// clang-format off
+#define arbFatal(...) do { if (arbDebugFlag & DEBUG_FATAL) { taosPrintLog("ARB FATAL ", DEBUG_FATAL, 255, __VA_ARGS__); }}     while(0)
+#define arbError(...) do { if (arbDebugFlag & DEBUG_ERROR) { taosPrintLog("ARB ERROR ", DEBUG_ERROR, 255, __VA_ARGS__); }}     while(0)
+#define arbWarn(...)  do { if (arbDebugFlag & DEBUG_WARN)  { taosPrintLog("ARB WARN ", DEBUG_WARN, 255, __VA_ARGS__); }}       while(0)
+#define arbInfo(...)  do { if (arbDebugFlag & DEBUG_INFO)  { taosPrintLog("ARB ", DEBUG_INFO, 255, __VA_ARGS__); }}            while(0)
+#define arbDebug(...) do { if (arbDebugFlag & DEBUG_DEBUG) { taosPrintLog("ARB ", DEBUG_DEBUG, arbDebugFlag, __VA_ARGS__); }}    while(0)
+#define arbTrace(...) do { if (arbDebugFlag & DEBUG_TRACE) { taosPrintLog("ARB ", DEBUG_TRACE, arbDebugFlag, __VA_ARGS__); }}    while(0)
+// clang-format on
+
 /* ------------------------ TYPES EXPOSED ------------------------ */
 typedef struct SArbitrator SArbitrator;
-
-typedef struct {
-  SMsgCb msgCb;
-} SArbitratorOpt;
+typedef struct SArbitratorCfg SArbitratorCfg;
 
 /* ------------------------ SArbitrator ------------------------ */
-/**
- * @brief Start one Arbitrator in Dnode.
- *
- * @param pOption Option of the arbitrator.
- * @return SArbitrator* The arbitrator object.
- */
-SArbitrator *arbOpen(const SArbitratorOpt *pOption);
 
-/**
- * @brief Stop Arbitrator in Dnode.
- *
- * @param pArbitrator The arbitrator object to close.
- */
-void arbClose(SArbitrator *pArbitrator);
+SArbitrator *arbitratorOpen(const char *path, SMsgCb msgCb, bool force);
+void         arbitratorClose(SArbitrator *pArbitrator);
 
-/**
- * @brief Process a query or fetch message.
- *
- * @param pArbitrator The arbitrator object.
- * @param pMsg The request message
- */
-int32_t arbProcessQueryMsg(SArbitrator *pArbitrator, int64_t ts, SRpcMsg *pMsg);
+int32_t arbitratorCreate(const char *path, int32_t arbitratorId);
+
+int32_t arbitratorStart(SArbitrator *pArbitrator);
+void    arbitratorStop(SArbitrator *pArbitrator);
+
+int32_t arbitratorProcessMsg(SArbitrator *pArbitrator, int64_t ts, SRpcMsg *pMsg);
+
+struct SArbitratorCfg {
+  int32_t arbitratorId;
+};
 
 #ifdef __cplusplus
 }

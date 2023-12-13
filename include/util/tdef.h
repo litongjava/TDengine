@@ -541,6 +541,7 @@ enum {
 
 #define VNODE_TIMEOUT_SEC 60
 #define MNODE_TIMEOUT_SEC 60
+#define ARBITRATOR_TIMEOUT_SEC 60
 
 #ifdef __cplusplus
 }

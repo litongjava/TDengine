@@ -25,11 +25,11 @@
 #define ARBITRATOR_VER_NUMBER   1
 #define ARBITRATOR_RESERVE_SIZE 64
 
-static SSdbRaw *mndArbitratorActionEncode(SArbitratorObj *pObj);
+static SSdbRaw *mndArbitratorActionEncode(SArbObj *pObj);
 static SSdbRow *mndArbitratorActionDecode(SSdbRaw *pRaw);
-static int32_t  mndArbitratorActionInsert(SSdb *pSdb, SArbitratorObj *pObj);
-static int32_t  mndArbitratorActionUpdate(SSdb *pSdb, SArbitratorObj *pOld, SArbitratorObj *pNew);
-static int32_t  mndArbitratorActionDelete(SSdb *pSdb, SArbitratorObj *pObj);
+static int32_t  mndArbitratorActionInsert(SSdb *pSdb, SArbObj *pObj);
+static int32_t  mndArbitratorActionUpdate(SSdb *pSdb, SArbObj *pOld, SArbObj *pNew);
+static int32_t  mndArbitratorActionDelete(SSdb *pSdb, SArbObj *pObj);
 static int32_t  mndProcessCreateArbitratorReq(SRpcMsg *pReq);
 static int32_t  mndProcessDropArbitratorReq(SRpcMsg *pReq);
 // static int32_t  mndProcessArbitratorListReq(SRpcMsg *pReq);
@@ -61,23 +61,23 @@ int32_t mndInitArbitrator(SMnode *pMnode) {
 
 void mndCleanupArbitrator(SMnode *pMnode) {}
 
-SArbitratorObj *mndAcquireArbitrator(SMnode *pMnode, int32_t arbitratorId) {
-  SArbitratorObj *pObj = sdbAcquire(pMnode->pSdb, SDB_ARBITRATOR, &arbitratorId);
+SArbObj *mndAcquireArbitrator(SMnode *pMnode, int32_t arbitratorId) {
+  SArbObj *pObj = sdbAcquire(pMnode->pSdb, SDB_ARBITRATOR, &arbitratorId);
   if (pObj == NULL && terrno == TSDB_CODE_SDB_OBJ_NOT_THERE) {
     terrno = TSDB_CODE_MND_ARBITRATOR_NOT_EXIST;
   }
   return pObj;
 }
 
-void mndReleaseArbitrator(SMnode *pMnode, SArbitratorObj *pObj) {
+void mndReleaseArbitrator(SMnode *pMnode, SArbObj *pObj) {
   SSdb *pSdb = pMnode->pSdb;
   sdbRelease(pSdb, pObj);
 }
 
-static SSdbRaw *mndArbitratorActionEncode(SArbitratorObj *pObj) {
+static SSdbRaw *mndArbitratorActionEncode(SArbObj *pObj) {
   terrno = TSDB_CODE_OUT_OF_MEMORY;
 
-  SSdbRaw *pRaw = sdbAllocRaw(SDB_ARBITRATOR, ARBITRATOR_VER_NUMBER, sizeof(SArbitratorObj) + ARBITRATOR_RESERVE_SIZE);
+  SSdbRaw *pRaw = sdbAllocRaw(SDB_ARBITRATOR, ARBITRATOR_VER_NUMBER, sizeof(SArbObj) + ARBITRATOR_RESERVE_SIZE);
   if (pRaw == NULL) goto _OVER;
 
   int32_t dataPos = 0;
@@ -102,7 +102,7 @@ _OVER:
 static SSdbRow *mndArbitratorActionDecode(SSdbRaw *pRaw) {
   terrno = TSDB_CODE_OUT_OF_MEMORY;
   SSdbRow   *pRow = NULL;
-  SArbitratorObj *pObj = NULL;
+  SArbObj *pObj = NULL;
 
   int8_t sver = 0;
   if (sdbGetRawSoftVer(pRaw, &sver) != 0) goto _OVER;
@@ -112,7 +112,7 @@ static SSdbRow *mndArbitratorActionDecode(SSdbRaw *pRaw) {
     goto _OVER;
   }
 
-  pRow = sdbAllocRow(sizeof(SArbitratorObj));
+  pRow = sdbAllocRow(sizeof(SArbObj));
   if (pRow == NULL) goto _OVER;
 
   pObj = sdbGetRowObj(pRow);
@@ -137,7 +137,7 @@ _OVER:
   return pRow;
 }
 
-static int32_t mndArbitratorActionInsert(SSdb *pSdb, SArbitratorObj *pObj) {
+static int32_t mndArbitratorActionInsert(SSdb *pSdb, SArbObj *pObj) {
   mTrace("arbitrator:%d, perform insert action, row:%p", pObj->id, pObj);
   pObj->pDnode = sdbAcquire(pSdb, SDB_DNODE, &pObj->id);
   if (pObj->pDnode == NULL) {
@@ -149,7 +149,7 @@ static int32_t mndArbitratorActionInsert(SSdb *pSdb, SArbitratorObj *pObj) {
   return 0;
 }
 
-static int32_t mndArbitratorActionDelete(SSdb *pSdb, SArbitratorObj *pObj) {
+static int32_t mndArbitratorActionDelete(SSdb *pSdb, SArbObj *pObj) {
   mTrace("arbitrator:%d, perform delete action, row:%p", pObj->id, pObj);
   if (pObj->pDnode != NULL) {
     sdbRelease(pSdb, pObj->pDnode);
@@ -159,13 +159,13 @@ static int32_t mndArbitratorActionDelete(SSdb *pSdb, SArbitratorObj *pObj) {
   return 0;
 }
 
-static int32_t mndArbitratorActionUpdate(SSdb *pSdb, SArbitratorObj *pOld, SArbitratorObj *pNew) {
+static int32_t mndArbitratorActionUpdate(SSdb *pSdb, SArbObj *pOld, SArbObj *pNew) {
   mTrace("arbitrator:%d, perform update action, old row:%p new row:%p", pOld->id, pOld, pNew);
   pOld->updateTime = pNew->updateTime;
   return 0;
 }
 
-static int32_t mndSetCreateArbitratorRedoLogs(STrans *pTrans, SArbitratorObj *pObj) {
+static int32_t mndSetCreateArbitratorRedoLogs(STrans *pTrans, SArbObj *pObj) {
   SSdbRaw *pRedoRaw = mndArbitratorActionEncode(pObj);
   if (pRedoRaw == NULL) return -1;
   if (mndTransAppendRedolog(pTrans, pRedoRaw) != 0) return -1;
@@ -173,7 +173,7 @@ static int32_t mndSetCreateArbitratorRedoLogs(STrans *pTrans, SArbitratorObj *pO
   return 0;
 }
 
-static int32_t mndSetCreateArbitratorUndoLogs(STrans *pTrans, SArbitratorObj *pObj) {
+static int32_t mndSetCreateArbitratorUndoLogs(STrans *pTrans, SArbObj *pObj) {
   SSdbRaw *pUndoRaw = mndArbitratorActionEncode(pObj);
   if (pUndoRaw == NULL) return -1;
   if (mndTransAppendUndolog(pTrans, pUndoRaw) != 0) return -1;
@@ -181,7 +181,7 @@ static int32_t mndSetCreateArbitratorUndoLogs(STrans *pTrans, SArbitratorObj *pO
   return 0;
 }
 
-int32_t mndSetCreateArbitratorCommitLogs(STrans *pTrans, SArbitratorObj *pObj) {
+int32_t mndSetCreateArbitratorCommitLogs(STrans *pTrans, SArbObj *pObj) {
   SSdbRaw *pCommitRaw = mndArbitratorActionEncode(pObj);
   if (pCommitRaw == NULL) return -1;
   if (mndTransAppendCommitlog(pTrans, pCommitRaw) != 0) return -1;
@@ -189,17 +189,18 @@ int32_t mndSetCreateArbitratorCommitLogs(STrans *pTrans, SArbitratorObj *pObj) {
   return 0;
 }
 
-int32_t mndSetCreateArbitratorRedoActions(STrans *pTrans, SDnodeObj *pDnode, SArbitratorObj *pObj) {
+int32_t mndSetCreateArbitratorRedoActions(STrans *pTrans, SDnodeObj *pDnode, SArbObj *pObj) {
   SDCreateArbitratorReq createReq = {0};
   createReq.dnodeId = pDnode->id;
+  createReq.arbitratorId = pObj->id;
 
-  int32_t contLen = tSerializeSCreateDropMQSNodeReq(NULL, 0, &createReq);
+  int32_t contLen = tSerializeSDCreateArbitratorReq(NULL, 0, &createReq);
   void   *pReq = taosMemoryMalloc(contLen);
   if (pReq == NULL) {
     terrno = TSDB_CODE_OUT_OF_MEMORY;
     return -1;
   }
-  tSerializeSCreateDropMQSNodeReq(pReq, contLen, &createReq);
+  tSerializeSDCreateArbitratorReq(pReq, contLen, &createReq);
 
   STransAction action = {0};
   action.epSet = mndGetDnodeEpset(pDnode);
@@ -216,17 +217,17 @@ int32_t mndSetCreateArbitratorRedoActions(STrans *pTrans, SDnodeObj *pDnode, SAr
   return 0;
 }
 
-static int32_t mndSetCreateArbitratorUndoActions(STrans *pTrans, SDnodeObj *pDnode, SArbitratorObj *pObj) {
+static int32_t mndSetCreateArbitratorUndoActions(STrans *pTrans, SDnodeObj *pDnode, SArbObj *pObj) {
   SDDropArbitratorReq dropReq = {0};
   dropReq.dnodeId = pDnode->id;
 
-  int32_t contLen = tSerializeSCreateDropMQSNodeReq(NULL, 0, &dropReq);
+  int32_t contLen = tSerializeSDCreateArbitratorReq(NULL, 0, &dropReq);
   void   *pReq = taosMemoryMalloc(contLen);
   if (pReq == NULL) {
     terrno = TSDB_CODE_OUT_OF_MEMORY;
     return -1;
   }
-  tSerializeSCreateDropMQSNodeReq(pReq, contLen, &dropReq);
+  tSerializeSDCreateArbitratorReq(pReq, contLen, &dropReq);
 
   STransAction action = {0};
   action.epSet = mndGetDnodeEpset(pDnode);
@@ -246,8 +247,8 @@ static int32_t mndSetCreateArbitratorUndoActions(STrans *pTrans, SDnodeObj *pDno
 static int32_t mndCreateArbitrator(SMnode *pMnode, SRpcMsg *pReq, SDnodeObj *pDnode, SMCreateArbitratorReq *pCreate) {
   int32_t code = -1;
 
-  SArbitratorObj arbitratorObj = {0};
-  arbitratorObj.id = pDnode->id;
+  SArbObj arbitratorObj = {0};
+  arbitratorObj.id = sdbGetMaxId(pMnode->pSdb, SDB_ARBITRATOR);
   arbitratorObj.createdTime = taosGetTimestampMs();
   arbitratorObj.updateTime = arbitratorObj.createdTime;
 
@@ -272,7 +273,7 @@ _OVER:
 static int32_t mndProcessCreateArbitratorReq(SRpcMsg *pReq) {
   SMnode          *pMnode = pReq->info.node;
   int32_t          code = -1;
-  SArbitratorObj       *pObj = NULL;
+  SArbObj       *pObj = NULL;
   SDnodeObj       *pDnode = NULL;
   SMCreateArbitratorReq createReq = {0};
 
@@ -318,7 +319,7 @@ _OVER:
   return code;
 }
 
-static int32_t mndSetDropArbitratorRedoLogs(STrans *pTrans, SArbitratorObj *pObj) {
+static int32_t mndSetDropArbitratorRedoLogs(STrans *pTrans, SArbObj *pObj) {
   SSdbRaw *pRedoRaw = mndArbitratorActionEncode(pObj);
   if (pRedoRaw == NULL) return -1;
   if (mndTransAppendRedolog(pTrans, pRedoRaw) != 0) return -1;
@@ -326,7 +327,7 @@ static int32_t mndSetDropArbitratorRedoLogs(STrans *pTrans, SArbitratorObj *pObj
   return 0;
 }
 
-static int32_t mndSetDropArbitratorCommitLogs(STrans *pTrans, SArbitratorObj *pObj) {
+static int32_t mndSetDropArbitratorCommitLogs(STrans *pTrans, SArbObj *pObj) {
   SSdbRaw *pCommitRaw = mndArbitratorActionEncode(pObj);
   if (pCommitRaw == NULL) return -1;
   if (mndTransAppendCommitlog(pTrans, pCommitRaw) != 0) return -1;
@@ -334,17 +335,17 @@ static int32_t mndSetDropArbitratorCommitLogs(STrans *pTrans, SArbitratorObj *pO
   return 0;
 }
 
-static int32_t mndSetDropArbitratorRedoActions(STrans *pTrans, SDnodeObj *pDnode, SArbitratorObj *pObj) {
+static int32_t mndSetDropArbitratorRedoActions(STrans *pTrans, SDnodeObj *pDnode, SArbObj *pObj) {
   SDDropArbitratorReq dropReq = {0};
   dropReq.dnodeId = pDnode->id;
 
-  int32_t contLen = tSerializeSCreateDropMQSNodeReq(NULL, 0, &dropReq);
+  int32_t contLen = tSerializeSDCreateArbitratorReq(NULL, 0, &dropReq);
   void   *pReq = taosMemoryMalloc(contLen);
   if (pReq == NULL) {
     terrno = TSDB_CODE_OUT_OF_MEMORY;
     return -1;
   }
-  tSerializeSCreateDropMQSNodeReq(pReq, contLen, &dropReq);
+  tSerializeSDCreateArbitratorReq(pReq, contLen, &dropReq);
 
   STransAction action = {0};
   action.epSet = mndGetDnodeEpset(pDnode);
@@ -361,7 +362,7 @@ static int32_t mndSetDropArbitratorRedoActions(STrans *pTrans, SDnodeObj *pDnode
   return 0;
 }
 
-int32_t mndSetDropArbitratorInfoToTrans(SMnode *pMnode, STrans *pTrans, SArbitratorObj *pObj, bool force) {
+int32_t mndSetDropArbitratorInfoToTrans(SMnode *pMnode, STrans *pTrans, SArbObj *pObj, bool force) {
   if (pObj == NULL) return 0;
   if (mndSetDropArbitratorRedoLogs(pTrans, pObj) != 0) return -1;
   if (mndSetDropArbitratorCommitLogs(pTrans, pObj) != 0) return -1;
@@ -371,7 +372,7 @@ int32_t mndSetDropArbitratorInfoToTrans(SMnode *pMnode, STrans *pTrans, SArbitra
   return 0;
 }
 
-static int32_t mndDropArbitrator(SMnode *pMnode, SRpcMsg *pReq, SArbitratorObj *pObj) {
+static int32_t mndDropArbitrator(SMnode *pMnode, SRpcMsg *pReq, SArbObj *pObj) {
   int32_t code = -1;
 
   STrans *pTrans = mndTransCreate(pMnode, TRN_POLICY_RETRY, TRN_CONFLICT_NOTHING, pReq, "drop-arbitrator");
@@ -391,7 +392,7 @@ _OVER:
 static int32_t mndProcessDropArbitratorReq(SRpcMsg *pReq) {
   SMnode        *pMnode = pReq->info.node;
   int32_t        code = -1;
-  SArbitratorObj     *pObj = NULL;
+  SArbObj     *pObj = NULL;
   SMDropArbitratorReq dropReq = {0};
 
   if (tDeserializeSCreateDropMQSNodeReq(pReq->pCont, pReq->contLen, &dropReq) != 0) {
@@ -435,7 +436,7 @@ _OVER:
 // int32_t mndCreateArbitratorList(SMnode *pMnode, SArray **pList, int32_t limit) {
 //   SSdb      *pSdb = pMnode->pSdb;
 //   void      *pIter = NULL;
-//   SArbitratorObj *pObj = NULL;
+//   SArbObj *pObj = NULL;
 //   int32_t    numOfRows = 0;
 
 //   SArray *arbitratorList = taosArrayInit(5, sizeof(SQueryNodeLoad));
@@ -511,7 +512,7 @@ static int32_t mndRetrieveArbitrators(SRpcMsg *pReq, SShowObj *pShow, SSDataBloc
   SSdb      *pSdb = pMnode->pSdb;
   int32_t    numOfRows = 0;
   int32_t    cols = 0;
-  SArbitratorObj *pObj = NULL;
+  SArbObj *pObj = NULL;
   char      *pWrite;
 
   while (numOfRows < rows) {
@@ -542,4 +543,9 @@ static int32_t mndRetrieveArbitrators(SRpcMsg *pReq, SShowObj *pShow, SSDataBloc
 static void mndCancelGetNextArbitrator(SMnode *pMnode, void *pIter) {
   SSdb *pSdb = pMnode->pSdb;
   sdbCancelFetch(pSdb, pIter);
+}
+
+int32_t mndGetArbitratorSize(SMnode *pMnode) {
+  SSdb *pSdb = pMnode->pSdb;
+  return sdbGetSize(pSdb, SDB_ARBITRATOR);
 }

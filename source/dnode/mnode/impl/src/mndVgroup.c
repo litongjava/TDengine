@@ -332,7 +332,7 @@ void *mndBuildCreateVnodeReq(SMnode *pMnode, SDnodeObj *pDnode, SDbObj *pDb, SVg
   SArbInfo *pArbitrator = &createReq.arbitrator;
   pArbitrator->arbitratorId = pVgroup->arbitratorId;
   if (pVgroup->arbitratorId != -1) {
-    SArbitratorObj *pVgArbitrator = mndAcquireArbitrator(pMnode, pVgroup->arbitratorId);
+    SArbObj *pVgArbitrator = mndAcquireArbitrator(pMnode, pVgroup->arbitratorId);
     if (pVgArbitrator == NULL) {
       return NULL;
     }
@@ -352,7 +352,7 @@ void *mndBuildCreateVnodeReq(SMnode *pMnode, SDnodeObj *pDnode, SDbObj *pDb, SVg
   mInfo(
       "vgId:%d, build create vnode req, replica:%d selfIndex:%d learnerReplica:%d learnerSelfIndex:%d strict:%d "
       "changeVersion:%d",
-      createReq.vgId, createReq.replica, createReq.selfIndex, createReq.learnerReplica, createReq.learnerReplica,
+      createReq.vgId, createReq.replica, createReq.selfIndex, createReq.learnerReplica, createReq.learnerSelfIndex,
       createReq.strict, createReq.changeVersion);
   for (int32_t i = 0; i < createReq.replica; ++i) {
     mInfo("vgId:%d, replica:%d ep:%s:%u", createReq.vgId, i, createReq.replicas[i].fqdn, createReq.replicas[i].port);
@@ -732,11 +732,52 @@ static int32_t mndCompareDnodeVnodes(SDnodeObj *pDnode1, SDnodeObj *pDnode2) {
   return d1Score > d2Score ? 1 : -1;
 }
 
-static int32_t mndGetArbitratorScore(SArbitratorObj *pArbitrator) {
+static int32_t mndGetArbitratorScore(SArbObj *pArbitrator) {
   return pArbitrator->numOfVgroups;
 }
 
-static int32_t mndCompareDnodeArbitrators(SArbitratorObj *pArbitrator1, SArbitratorObj *pArbitrator2) {
+static bool mndBuildArbitratorsArrayFp(SMnode *pMnode, void *pObj, void *p1, void *p2, void *p3) {
+  SArbObj *pArbitrator = pObj;
+  SArray         *pArray = p1;
+  int32_t         exceptArbitratorId = *(int32_t *)p2;
+
+  if (exceptArbitratorId == pArbitrator->id) {
+    return true;
+  }
+
+  int64_t curMs = taosGetTimestampMs();
+  bool    online = mndIsDnodeOnline(pArbitrator->pDnode, curMs);
+
+  mInfo("arbitrator:%d, vgroups:%d online:%d", pArbitrator->id, pArbitrator->numOfVgroups, online);
+
+  if (online) {
+    taosArrayPush(pArray, pArbitrator);
+  }
+  return true;
+}
+
+SArray *mndBuildArbitratorsArray(SMnode *pMnode, int32_t exceptArbitratorId) {
+  SSdb   *pSdb = pMnode->pSdb;
+  int32_t numOfArbitrators = mndGetArbitratorSize(pMnode);
+
+  SArray *pArray = taosArrayInit(numOfArbitrators, sizeof(SArbObj));
+  if (pArray == NULL) {
+    terrno = TSDB_CODE_OUT_OF_MEMORY;
+    return NULL;
+  }
+
+  //sdbTraverse(pSdb, SDB_ARBITRATOR, mndResetArbitratorsArrayFp, NULL, NULL, NULL);
+  sdbTraverse(pSdb, SDB_ARBITRATOR, mndBuildArbitratorsArrayFp, pArray, &exceptArbitratorId, NULL);
+
+  mDebug("build %d arbitrators array", (int32_t)taosArrayGetSize(pArray));
+  for (int32_t i = 0; i < (int32_t)taosArrayGetSize(pArray); ++i) {
+    SArbObj *pArbitrator = taosArrayGet(pArray, i);
+    mDebug("arbitrator:%d, vgroups:%d", pArbitrator->id, pArbitrator->numOfVgroups);
+  }
+  return pArray;
+}
+
+static int32_t mndCompareDnodeArbitrators(SArbObj *pArbitrator1, SArbObj *pArbitrator2) {
   int32_t arb1Score = mndGetArbitratorScore(pArbitrator1);
   int32_t arb2Score = mndGetArbitratorScore(pArbitrator2);
   if (arb1Score == arb2Score) {
@@ -810,16 +851,21 @@ static int32_t mndGetAvailableDnode(SMnode *pMnode, SDbObj *pDb, SVgObj *pVgroup
 }
 
 static int32_t mndGetAvailableArbitrator(SVgObj *pVgroup, SArray *pArray) {
+  if (taosArrayGetSize(pArray) == 0) {
+    terrno = TSDB_CODE_ARBITRATOR_NO_ENOUGH_NODE;
+    return -1;
+  }
+
   mDebug("start to sort %d arbitrators", (int32_t)taosArrayGetSize(pArray));
   taosArraySort(pArray, (__compar_fn_t)mndCompareDnodeArbitrators);
   for (int32_t i = 0; i < (int32_t)taosArrayGetSize(pArray); ++i) {
-    SArbitratorObj *pArbitrator = taosArrayGet(pArray, i);
+    SArbObj *pArbitrator = taosArrayGet(pArray, i);
     mDebug("arbitrator:%d, score:%d", pArbitrator->id, mndGetArbitratorScore(pArbitrator));
   }
 
-  SArbitratorObj *pArbitrator = taosArrayGet(pArray, 0);
+  SArbObj *pArbitrator = taosArrayGet(pArray, 0);
   if (pArbitrator == NULL) {
-    terrno = TSDB_CODE_MND_NO_ENOUGH_DNODES;
+    terrno = TSDB_CODE_ARBITRATOR_NO_ENOUGH_NODE;
     return -1;
   }
   pVgroup->arbitratorId = pArbitrator->id;
@@ -852,7 +898,8 @@ int32_t mndAllocSmaVgroup(SMnode *pMnode, SDbObj *pDb, SVgObj *pVgroup) {
 
 int32_t mndAllocVgroup(SMnode *pMnode, SDbObj *pDb, SVgObj **ppVgroups) {
   int32_t code = -1;
-  SArray *pArray = NULL;
+  SArray *pDnodeArray = NULL;
+  SArray *pArbitratorArray = NULL;
   SVgObj *pVgroups = NULL;
 
   pVgroups = taosMemoryCalloc(pDb->cfg.numOfVgroups, sizeof(SVgObj));
@@ -861,11 +908,15 @@ int32_t mndAllocVgroup(SMnode *pMnode, SDbObj *pDb, SVgObj **ppVgroups) {
     goto _OVER;
   }
 
-  pArray = mndBuildDnodesArray(pMnode, 0);
-  if (pArray == NULL) goto _OVER;
+  pDnodeArray = mndBuildDnodesArray(pMnode, 0);
+  if (pDnodeArray == NULL) goto _OVER;
 
-  mInfo("db:%s, total %d dnodes used to create %d vgroups (%d vnodes)", pDb->name, (int32_t)taosArrayGetSize(pArray),
-        pDb->cfg.numOfVgroups, pDb->cfg.numOfVgroups * pDb->cfg.replications);
+  pArbitratorArray = mndBuildArbitratorsArray(pMnode, 0);
+  if (pArbitratorArray == NULL) goto _OVER;
+
+  mInfo("db:%s, total %d dnodes %d arbitrator used to create %d vgroups (%d vnodes)", pDb->name,
+        (int32_t)taosArrayGetSize(pDnodeArray), (int32_t)taosArrayGetSize(pArbitratorArray), pDb->cfg.numOfVgroups,
+        pDb->cfg.numOfVgroups * pDb->cfg.replications);
 
   int32_t  allocedVgroups = 0;
   int32_t  maxVgId = sdbGetMaxId(pMnode->pSdb, SDB_VGROUP);
@@ -892,13 +943,15 @@ int32_t mndAllocVgroup(SMnode *pMnode, SDbObj *pDb, SVgObj **ppVgroups) {
     pVgroup->dbUid = pDb->uid;
     pVgroup->replica = pDb->cfg.replications;
 
-    if (mndGetAvailableDnode(pMnode, pDb, pVgroup, pArray) != 0) {
+    if (mndGetAvailableDnode(pMnode, pDb, pVgroup, pDnodeArray) != 0) {
       goto _OVER;
     }
 
     pVgroup->arbitratorId = -1;
     if (pDb->cfg.withArbitrator) {
-      //pVgroup->arbitratorId = mndGetAvailableArbitrator(pVgroup, pArbitratorArray);
+      if (mndGetAvailableArbitrator(pVgroup, pArbitratorArray) != 0) {
+        goto _OVER;
+      }
     }
 
     allocedVgroups++;
@@ -907,11 +960,13 @@ int32_t mndAllocVgroup(SMnode *pMnode, SDbObj *pDb, SVgObj **ppVgroups) {
   *ppVgroups = pVgroups;
   code = 0;
 
-  mInfo("db:%s, total %d vgroups is alloced, replica:%d", pDb->name, pDb->cfg.numOfVgroups, pDb->cfg.replications);
+  mInfo("db:%s, total %d vgroups is alloced, replica:%d, withArbitrator:%d", pDb->name, pDb->cfg.numOfVgroups,
+        pDb->cfg.replications, pDb->cfg.withArbitrator);
 
 _OVER:
   if (code != 0) taosMemoryFree(pVgroups);
-  taosArrayDestroy(pArray);
+  taosArrayDestroy(pDnodeArray);
+  taosArrayDestroy(pArbitratorArray);
   return code;
 }
 
