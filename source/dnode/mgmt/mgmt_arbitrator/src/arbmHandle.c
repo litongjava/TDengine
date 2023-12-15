@@ -88,21 +88,21 @@ int32_t arbmProcessDropReq(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg) {
     return -1;
   }
 
-  SArbitratorObj *pArbitrator = arbmAcquireArbitratorImpl(pMgmt, arbitratorId, false);
-  if (pArbitrator == NULL) {
+  SArbitratorObj *pArbObj = arbmAcquireArbitratorImpl(pMgmt, arbitratorId, false);
+  if (pArbObj == NULL) {
     dInfo("arbitratorId:%d, failed to drop since %s", arbitratorId, terrstr());
     terrno = TSDB_CODE_ARB_NOT_EXIST;
     return -1;
   }
 
-  pArbitrator->dropped = 1;
+  pArbObj->dropped = 1;
   if (arbmWriteArbitratorListToFile(pMgmt) != 0) {
-    pArbitrator->dropped = 0;
-    arbmReleaseArbitrator(pMgmt, pArbitrator);
+    pArbObj->dropped = 0;
+    arbmReleaseArbitrator(pMgmt, pArbObj);
     return -1;
   }
 
-  arbmCloseArbitrator(pMgmt, pArbitrator);
+  arbmCloseArbitrator(pMgmt, pArbObj);
   arbmWriteArbitratorListToFile(pMgmt);
 
   dInfo("arbitratorId:%d, is dropped", arbitratorId);

@@ -24,16 +24,16 @@ SArbitratorObj **arbmGetArbitratorListFromHash(SArbitratorMgmt *pMgmt, int32_t *
 
   int32_t          num = 0;
   int32_t          size = taosHashGetSize(pMgmt->hash);
-  SArbitratorObj **pArbitrators = taosMemoryCalloc(size, sizeof(SArbitratorObj *));
+  SArbitratorObj **pArbObjs = taosMemoryCalloc(size, sizeof(SArbitratorObj *));
 
   void *pIter = taosHashIterate(pMgmt->hash, NULL);
   while (pIter) {
-    SArbitratorObj **ppArbitrator = pIter;
-    SArbitratorObj  *pArbitrator = *ppArbitrator;
-    if (pArbitrator && num < size) {
-      int32_t refCount = atomic_add_fetch_32(&pArbitrator->refCount, 1);
-      // dTrace("vgId:%d, acquire arbitrator list, ref:%d", pArbitrator->vgId, refCount);
-      pArbitrators[num++] = (*ppArbitrator);
+    SArbitratorObj **ppArbObj = pIter;
+    SArbitratorObj  *pArbObj = *ppArbObj;
+    if (pArbObj && num < size) {
+      int32_t refCount = atomic_add_fetch_32(&pArbObj->refCount, 1);
+      // dTrace("vgId:%d, acquire arbitrator list, ref:%d", pArbObj->vgId, refCount);
+      pArbObjs[num++] = (*ppArbObj);
       pIter = taosHashIterate(pMgmt->hash, pIter);
     } else {
       taosHashCancelIterate(pMgmt->hash, pIter);
@@ -43,7 +43,7 @@ SArbitratorObj **arbmGetArbitratorListFromHash(SArbitratorMgmt *pMgmt, int32_t *
   taosThreadRwlockUnlock(&pMgmt->lock);
   *numOfArbitrators = num;
 
-  return pArbitrators;
+  return pArbObjs;
 }
 
 static int32_t arbmDecodeArbitratorList(SJson *pJson, SArbitratorMgmt *pMgmt, SArbWrapperCfg **ppCfgs,
@@ -150,19 +150,19 @@ _OVER:
   return code;
 }
 
-static int32_t arbmEncodeArbitratorList(SJson *pJson, SArbitratorObj **ppArbitrators, int32_t numOfArbitrators) {
+static int32_t arbmEncodeArbitratorList(SJson *pJson, SArbitratorObj **ppArbObjs, int32_t numOfArbitrators) {
   SJson *arbitrators = tjsonCreateArray();
   if (arbitrators == NULL) return -1;
   if (tjsonAddItemToObject(pJson, "arbitrators", arbitrators) < 0) return -1;
 
   for (int32_t i = 0; i < numOfArbitrators; ++i) {
-    SArbitratorObj *pArbitrator = ppArbitrators[i];
-    if (pArbitrator == NULL) continue;
+    SArbitratorObj *pArbObj = ppArbObjs[i];
+    if (pArbObj == NULL) continue;
 
     SJson *arbitrator = tjsonCreateObject();
     if (arbitrator == NULL) return -1;
-    if (tjsonAddDoubleToObject(arbitrator, "arbitratorId", pArbitrator->arbitratorId) < 0) return -1;
-    if (tjsonAddDoubleToObject(arbitrator, "dropped", pArbitrator->dropped) < 0) return -1;
+    if (tjsonAddDoubleToObject(arbitrator, "arbitratorId", pArbObj->arbitratorId) < 0) return -1;
+    if (tjsonAddDoubleToObject(arbitrator, "dropped", pArbObj->dropped) < 0) return -1;
     if (tjsonAddItemToArray(arbitrators, arbitrator) < 0) return -1;
   }
 
@@ -174,20 +174,20 @@ int32_t arbmWriteArbitratorListToFile(SArbitratorMgmt *pMgmt) {
   char            *buffer = NULL;
   SJson           *pJson = NULL;
   TdFilePtr        pFile = NULL;
-  SArbitratorObj **ppArbitrators = NULL;
+  SArbitratorObj **ppArbObjs = NULL;
   char             file[PATH_MAX] = {0};
   char             realfile[PATH_MAX] = {0};
   snprintf(file, sizeof(file), "%s%s%s", pMgmt->path, TD_DIRSEP, ARB_MGMT_INFO_FNAME_TMP);
   snprintf(realfile, sizeof(realfile), "%s%s%s", pMgmt->path, TD_DIRSEP, ARB_MGMT_INFO_FNAME);
 
   int32_t numOfArbitrators = 0;
-  ppArbitrators = arbmGetArbitratorListFromHash(pMgmt, &numOfArbitrators);
-  if (ppArbitrators == NULL) goto _OVER;
+  ppArbObjs = arbmGetArbitratorListFromHash(pMgmt, &numOfArbitrators);
+  if (ppArbObjs == NULL) goto _OVER;
 
   terrno = TSDB_CODE_OUT_OF_MEMORY;
   pJson = tjsonCreateObject();
   if (pJson == NULL) goto _OVER;
-  if (arbmEncodeArbitratorList(pJson, ppArbitrators, numOfArbitrators) != 0) goto _OVER;
+  if (arbmEncodeArbitratorList(pJson, ppArbObjs, numOfArbitrators) != 0) goto _OVER;
   buffer = tjsonToString(pJson);
   if (buffer == NULL) goto _OVER;
   terrno = 0;
@@ -209,14 +209,14 @@ _OVER:
   if (pJson != NULL) tjsonDelete(pJson);
   if (buffer != NULL) taosMemoryFree(buffer);
   if (pFile != NULL) taosCloseFile(&pFile);
-  if (ppArbitrators != NULL) {
+  if (ppArbObjs != NULL) {
     for (int32_t i = 0; i < numOfArbitrators; ++i) {
-      SArbitratorObj *pArbitrator = ppArbitrators[i];
-      if (pArbitrator != NULL) {
-        arbmReleaseArbitrator(pMgmt, pArbitrator);
+      SArbitratorObj *pArbObj = ppArbObjs[i];
+      if (pArbObj != NULL) {
+        arbmReleaseArbitrator(pMgmt, pArbObj);
       }
     }
-    taosMemoryFree(ppArbitrators);
+    taosMemoryFree(ppArbObjs);
   }
 
   if (code != 0) {

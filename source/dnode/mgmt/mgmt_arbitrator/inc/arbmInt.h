@@ -94,8 +94,8 @@ int32_t arbmGetQueueSize(SArbitratorMgmt *pMgmt, int32_t vgId, EQueueType qtype)
 
 int32_t arbmStartWorker(SArbitratorMgmt *pMgmt);
 void    arbmStopWorker(SArbitratorMgmt *pMgmt);
-int32_t arbmAllocQueue(SArbitratorMgmt *pMgmt, SArbitratorObj *pArbitrator);
-void    arbmFreeQueue(SArbitratorMgmt *pMgmt, SArbitratorObj *pArbitrator);
+int32_t arbObjStartWorker(SArbitratorObj *pArbitrator);
+void    arbObjStopWorker(SArbitratorObj *pArbitrator);
 
 int32_t arbmPutNodeMsgToQueue(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg);
 
