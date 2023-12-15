@@ -82,11 +82,34 @@ int32_t arbmGetQueueSize(SArbitratorMgmt *pMgmt, int32_t vgId, EQueueType qtype)
   return taosQueueItemSize(pMgmt->mgmtWorker.queue);
 }
 
+int32_t arbmAllocQueue(SArbitratorMgmt *pMgmt, SArbitratorObj *pArbitrator) {
+  SSingleWorkerCfg wcfg = {.min = 1,
+                           .max = 1,
+                           .name = "arb-worker",
+                           .fp = (FItem)arbitratorProcessQueue,
+                           .param = pArbitrator->pImpl};
+  (void)tSingleWorkerInit(&pArbitrator->pWriteW, &wcfg);
+
+  if (pArbitrator->pWriteW.queue == NULL) {
+    terrno = TSDB_CODE_OUT_OF_MEMORY;
+    return -1;
+  }
+
+  dInfo("arbitratorId:%d, write-queue:%p is alloced, thread:%08" PRId64, pArbitrator->arbitratorId,
+        pArbitrator->pWriteW.queue, pArbitrator->pWriteW.queue->threadId);
+  return 0;
+}
+
+void arbmFreeQueue(SArbitratorMgmt *pMgmt, SArbitratorObj *pArbitrator) {
+  tSingleWorkerCleanup(&pArbitrator->pWriteW);
+  dDebug("arbitratorId:%d, queue is freed", pArbitrator->arbitratorId);
+}
+
 int32_t arbmStartWorker(SArbitratorMgmt *pMgmt) {
   SSingleWorkerCfg workerCfg = {
       .min = 1,
       .max = 1,
-      .name = "arbitrator-worker",
+      .name = "arb-mgmt",
       .fp = (FItem)arbmProcessQueue,
       .param = pMgmt,
   };

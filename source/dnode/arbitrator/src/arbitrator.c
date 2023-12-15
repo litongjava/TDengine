@@ -13,25 +13,31 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "executor.h"
 #include "arbInt.h"
-#include "query.h"
-#include "qworker.h"
+#include "tqueue.h"
 
-int32_t arbProcessMsg(SArbitrator *pArbitrator, int64_t ts, SRpcMsg *pMsg) {
-  int32_t     code = -1;
-  SReadHandle handle = {.pMsgCb = NULL};
-  qTrace("message in arbitrator queue is processing");
+void arbitratorProcessQueue(SArbitrator *pArbitrator, SRpcMsg *pMsg) {
+  int32_t          code = -1;
 
+  arbTrace("msg:%p, get from arb-worker queue", pMsg);
   switch (pMsg->msgType) {
-    case TDMT_SCH_QUERY_CONTINUE:
-      code = qWorkerProcessCQueryMsg(&handle, NULL, pMsg, ts);
+    case TDMT_DND_CREATE_ARBITRATOR:
+      code = 0;
       break;
     default:
-      qError("unknown msg type:%d in arbitrator queue", pMsg->msgType);
-      terrno = TSDB_CODE_APP_ERROR;
+      terrno = TSDB_CODE_MSG_NOT_PROCESSED;
+      arbError("msg:%p, not processed in arb-worker queue", pMsg);
   }
 
-  if (code == 0) return TSDB_CODE_ACTION_IN_PROGRESS;
-  return code;
+  if (IsReq(pMsg)) {
+    if (code != 0) {
+      if (terrno != 0) code = terrno;
+      arbError("msg:%p, failed to process since %s, type:%s", pMsg, tstrerror(code), TMSG_INFO(pMsg->msgType));
+    }
+    //arbmSendRsp(pMsg, code);
+  }
+
+  arbTrace("msg:%p, is freed, code:0x%x", pMsg, code);
+  rpcFreeCont(pMsg->pCont);
+  taosFreeQitem(pMsg);
 }

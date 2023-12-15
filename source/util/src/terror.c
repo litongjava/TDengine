@@ -695,7 +695,10 @@ TAOS_DEFINE_ERROR(TSDB_CODE_STREAM_INVALID_STATETRANS,      "Invalid task state 
 TAOS_DEFINE_ERROR(TSDB_CODE_STREAM_TASK_IVLD_STATUS,        "Invalid task status to proceed")
 
 // arbitrator
-TAOS_DEFINE_ERROR(TSDB_CODE_ARBITRATOR_NO_ENOUGH_NODE,      "Out of arbitrators")
+TAOS_DEFINE_ERROR(TSDB_CODE_ARB_NO_ENOUGH_NODE,             "Out of arbitrators")
+TAOS_DEFINE_ERROR(TSDB_CODE_ARB_INVALID_ARB_ID,             "Arbitrator is closed or removed")
+TAOS_DEFINE_ERROR(TSDB_CODE_ARB_INIT_FAILED,                "Arbitrator init failure")
+TAOS_DEFINE_ERROR(TSDB_CODE_ARB_NOT_EXIST,                  "Arbitrator not exist")
 
 // TDLite
 TAOS_DEFINE_ERROR(TSDB_CODE_TDLITE_IVLD_OPEN_FLAGS,         "Invalid TDLite open flags")

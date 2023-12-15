@@ -18,6 +18,8 @@
 
 int32_t arbmProcessCreateReq(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg) {
   SDCreateArbitratorReq createReq = {0};
+  SArbWrapperCfg        wrapperCfg = {0};
+  int32_t               code = -1;
   if (tDeserializeSDCreateArbitratorReq(pMsg->pCont, pMsg->contLen, &createReq) != 0) {
     terrno = TSDB_CODE_INVALID_MSG;
     return -1;
@@ -30,10 +32,50 @@ int32_t arbmProcessCreateReq(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg) {
 
   if (arbitratorCreate(path, arbId) != 0) {
     dError("arbitratorId:%d, failed to create arbitrator since %s", arbId, terrstr());
-    return -1;
+    code = terrno;
+    return code;
   }
 
-  return 0;
+  SArbitrator *pImpl = arbitratorOpen(path, pMgmt->msgCb);
+  if (pImpl == NULL) {
+    dError("arbitratorId:%d, failed to open arbitrator since %s", arbId, terrstr());
+    code = terrno;
+    goto _OVER;
+  }
+
+  wrapperCfg.arbitratorId = arbId;
+  wrapperCfg.dropped = 0;
+  snprintf(wrapperCfg.path, sizeof(wrapperCfg.path), "%s%sarbtrator%d", pMgmt->path, TD_DIRSEP, arbId);
+  code = arbmOpenArbitrator(pMgmt, &wrapperCfg, pImpl);
+  if (code != 0) {
+    dError("arbitratorId:%d, failed to open vnode since %s", arbId, terrstr());
+    code = terrno;
+    goto _OVER;
+  }
+
+  // code = arbitratorStart(pImpl);
+  // if (code != 0) {
+  //   dError("arbitratorId:%d, failed to start sync since %s", arbId, terrstr());
+  //   goto _OVER;
+  // }
+
+  code = arbmWriteArbitratorListToFile(pMgmt);
+  if (code != 0) {
+    code = terrno;
+    goto _OVER;
+  }
+
+_OVER:
+  if (code != 0) {
+    arbitratorClose(pImpl);
+    arbitratorDestroy(path);
+  } else {
+    dInfo("arbitratorId:%d, arbitrator management handle msgType:%s, end to create arbitrator, arbitrator is created",
+          arbId, TMSG_INFO(pMsg->msgType));
+  }
+
+  terrno = code;
+  return code;
 }
 
 int32_t arbmProcessDropReq(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg) {
@@ -43,6 +85,33 @@ int32_t arbmProcessDropReq(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg) {
     return -1;
   }
 
+  int32_t arbitratorId = dropReq.arbitratorId;
+  dInfo("arbitratorId:%d, start to drop arbitrator", arbitratorId);
+
+  if (dropReq.dnodeId != pMgmt->pData->dnodeId) {
+    terrno = TSDB_CODE_INVALID_MSG;
+    dError("arbitratorId:%d, dnodeId:%d not matched with local dnode", dropReq.arbitratorId, dropReq.dnodeId);
+    return -1;
+  }
+
+  SArbitratorObj *pArbitrator = arbmAcquireArbitratorImpl(pMgmt, arbitratorId, false);
+  if (pArbitrator == NULL) {
+    dInfo("arbitratorId:%d, failed to drop since %s", arbitratorId, terrstr());
+    terrno = TSDB_CODE_ARB_NOT_EXIST;
+    return -1;
+  }
+
+  pArbitrator->dropped = 1;
+  if (arbmWriteArbitratorListToFile(pMgmt) != 0) {
+    pArbitrator->dropped = 0;
+    arbmReleaseArbitrator(pMgmt, pArbitrator);
+    return -1;
+  }
+
+  arbmCloseArbitrator(pMgmt, pArbitrator);
+  arbmWriteArbitratorListToFile(pMgmt);
+
+  dInfo("arbitratorId:%d, is dropped", arbitratorId);
   return 0;
 }
 

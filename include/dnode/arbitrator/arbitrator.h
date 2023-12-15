@@ -37,15 +37,16 @@ typedef struct SArbitratorCfg SArbitratorCfg;
 
 /* ------------------------ SArbitrator ------------------------ */
 
-SArbitrator *arbitratorOpen(const char *path, SMsgCb msgCb, bool force);
+SArbitrator *arbitratorOpen(const char *path, SMsgCb msgCb);
 void         arbitratorClose(SArbitrator *pArbitrator);
+void         arbitratorDestroy(const char *path);
 
 int32_t arbitratorCreate(const char *path, int32_t arbitratorId);
 
 int32_t arbitratorStart(SArbitrator *pArbitrator);
 void    arbitratorStop(SArbitrator *pArbitrator);
 
-int32_t arbitratorProcessMsg(SArbitrator *pArbitrator, int64_t ts, SRpcMsg *pMsg);
+void arbitratorProcessQueue(SArbitrator *pArbitrator, SRpcMsg *pMsg);
 
 struct SArbitratorCfg {
   int32_t arbitratorId;

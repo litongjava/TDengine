@@ -20,12 +20,134 @@
 static int32_t arbmRequire(const SMgmtInputOpt *pInput, bool *required) {
   *required = true;
   return 0;
-  //return dmReadFile(pInput->path, pInput->name, required);
+  // return dmReadFile(pInput->path, pInput->name, required);
+}
+
+SArbitratorObj *arbmAcquireArbitratorImpl(SArbitratorMgmt *pMgmt, int32_t arbitratorId, bool strict) {
+  SArbitratorObj *pArbitrator = NULL;
+
+  taosThreadRwlockRdlock(&pMgmt->lock);
+  taosHashGetDup(pMgmt->hash, &arbitratorId, sizeof(int32_t), (void *)&pArbitrator);
+  if (pArbitrator == NULL || strict && (pArbitrator->dropped || pArbitrator->failed)) {
+    terrno = TSDB_CODE_ARB_INVALID_ARB_ID;
+    pArbitrator = NULL;
+  } else {
+    int32_t refCount = atomic_add_fetch_32(&pArbitrator->refCount, 1);
+    // dTrace("arbitratorId:%d, acquire arbitrator, ref:%d", pArbitrator->arbitratorId, refCount);
+  }
+  taosThreadRwlockUnlock(&pMgmt->lock);
+
+  return pArbitrator;
+}
+
+SArbitratorObj *arbmAcquireArbitrator(SArbitratorMgmt *pMgmt, int32_t arbitratorId) {
+  return arbmAcquireArbitratorImpl(pMgmt, arbitratorId, true);
+}
+
+void arbmReleaseArbitrator(SArbitratorMgmt *pMgmt, SArbitratorObj *pArbitrator) {
+  if (pArbitrator == NULL) return;
+
+  taosThreadRwlockRdlock(&pMgmt->lock);
+  int32_t refCount = atomic_sub_fetch_32(&pArbitrator->refCount, 1);
+  // dTrace("arbitratorId:%d, release arbitrator, ref:%d", pArbitrator->arbitratorId, refCount);
+  taosThreadRwlockUnlock(&pMgmt->lock);
 }
 
 static void arbmCleanup(SArbitratorMgmt *pMgmt) {
   arbmStopWorker(pMgmt);
   taosMemoryFree(pMgmt);
+}
+
+static void arbmFreeArbitratorObj(SArbitratorObj **ppArbitrator) {
+  if (!ppArbitrator || !(*ppArbitrator)) return;
+
+  SArbitratorObj *pArbitrator = *ppArbitrator;
+  taosMemoryFree(pArbitrator->path);
+  taosMemoryFree(pArbitrator);
+  ppArbitrator[0] = NULL;
+}
+
+int32_t arbmOpenArbitrator(SArbitratorMgmt *pMgmt, SArbWrapperCfg *pCfg, SArbitrator *pImpl) {
+  SArbitratorObj *pArbitrator = taosMemoryCalloc(1, sizeof(SArbitratorObj));
+  if (pArbitrator == NULL) {
+    terrno = TSDB_CODE_OUT_OF_MEMORY;
+    return -1;
+  }
+
+  pArbitrator->arbitratorId = pCfg->arbitratorId;
+  pArbitrator->refCount = 0;
+  pArbitrator->dropped = 0;
+  pArbitrator->failed = 0;
+  pArbitrator->path = taosStrdup(pCfg->path);
+  pArbitrator->pImpl = pImpl;
+
+  if (pArbitrator->path == NULL) {
+    terrno = TSDB_CODE_OUT_OF_MEMORY;
+    taosMemoryFree(pArbitrator);
+    return -1;
+  }
+
+  if (pImpl) {
+    if (arbmAllocQueue(pMgmt, pArbitrator) != 0) {
+      terrno = TSDB_CODE_OUT_OF_MEMORY;
+      taosMemoryFree(pArbitrator->path);
+      taosMemoryFree(pArbitrator);
+      return -1;
+    }
+  } else {
+    pArbitrator->failed = 1;
+  }
+
+  taosThreadRwlockWrlock(&pMgmt->lock);
+  SArbitratorObj *pOld = NULL;
+  taosHashGetDup(pMgmt->hash, &pArbitrator->arbitratorId, sizeof(int32_t), (void *)&pOld);
+  if (pOld) {
+    ASSERT(pOld->failed);
+    arbmFreeArbitratorObj(&pOld);
+  }
+  int32_t code =
+      taosHashPut(pMgmt->hash, &pArbitrator->arbitratorId, sizeof(int32_t), &pArbitrator, sizeof(SArbitratorObj *));
+  taosThreadRwlockUnlock(&pMgmt->lock);
+
+  return code;
+}
+
+void arbmCloseArbitrator(SArbitratorMgmt *pMgmt, SArbitratorObj *pArbitrator) {
+  char path[TSDB_FILENAME_LEN] = {0};
+
+  taosThreadRwlockWrlock(&pMgmt->lock);
+  taosHashRemove(pMgmt->hash, &pArbitrator->arbitratorId, sizeof(int32_t));
+  taosThreadRwlockUnlock(&pMgmt->lock);
+  arbmReleaseArbitrator(pMgmt, pArbitrator);
+
+  if (pArbitrator->failed) {
+    ASSERT(pArbitrator->pImpl == NULL);
+    goto _closed;
+  }
+
+  dInfo("arbitratorId:%d, wait for arbitrator ref become 0", pArbitrator->arbitratorId);
+  while (pArbitrator->refCount > 0) taosMsleep(10);
+
+  dInfo("arbitratorId:%d, wait for arbitrator write queue:%p is empty, thread:%08" PRId64, pArbitrator->arbitratorId,
+        pArbitrator->pWriteW.queue, pArbitrator->pWriteW.queue->threadId);
+  arbmFreeQueue(pMgmt, pArbitrator);
+
+  dInfo("arbitratorId:%d, all arbitrator queues is empty", pArbitrator->arbitratorId);
+
+
+  arbitratorClose(pArbitrator->pImpl);
+  pArbitrator->pImpl = NULL;
+
+_closed:
+  dInfo("arbitratorId:%d, arbitrator is closed", pArbitrator->arbitratorId);
+
+  if (pArbitrator->dropped) {
+    dInfo("arbitratorId:%d, arbitrator is destroyed, dropped:%d", pArbitrator->arbitratorId, pArbitrator->dropped);
+    snprintf(path, TSDB_FILENAME_LEN, "arbitrator%sarbitrator%d", TD_DIRSEP, pArbitrator->arbitratorId);
+    arbitratorDestroy(path);
+  }
+
+  arbmFreeArbitratorObj(&pArbitrator);
 }
 
 static void *arbmOpenArbitratorInThread(void *param) {
@@ -39,16 +161,16 @@ static void *arbmOpenArbitratorInThread(void *param) {
   SArbWrapperCfg *pCfg = pThread->pCfg;
 
   char stepDesc[TSDB_STEP_DESC_LEN] = {0};
-  snprintf(stepDesc, TSDB_STEP_DESC_LEN, "arbitratorId:%d, start to restore, %d of %d have been opened", pCfg->arbitratorId,
-           pMgmt->state.openArbitrators, pMgmt->state.totalArbitrators);
+  snprintf(stepDesc, TSDB_STEP_DESC_LEN, "arbitratorId:%d, start to restore, %d of %d have been opened",
+           pCfg->arbitratorId, pMgmt->state.openArbitrators, pMgmt->state.totalArbitrators);
   tmsgReportStartup("arbitrator-open", stepDesc);
 
   snprintf(path, TSDB_FILENAME_LEN, "arbitrator%sarbitrator%d", TD_DIRSEP, pCfg->arbitratorId);
 
-  SArbitrator *pImpl = arbitratorOpen(path, pMgmt->msgCb, false);
-
+  SArbitrator *pImpl = arbitratorOpen(path, pMgmt->msgCb);
   if (pImpl == NULL) {
-    dError("arbitratorId:%d, failed to open arbitrator by thread:%d since %s", pCfg->arbitratorId, pThread->threadIndex, terrstr());
+    dError("arbitratorId:%d, failed to open arbitrator by thread:%d since %s", pCfg->arbitratorId, pThread->threadIndex,
+           terrstr());
     if (terrno != TSDB_CODE_NEED_RETRY) {
       pThread->failed++;
       goto _err_out;
@@ -79,7 +201,7 @@ static int32_t arbmOpenArbitrators(SArbitratorMgmt *pMgmt) {
   }
 
   SArbWrapperCfg *pCfgs = NULL;
-  int32_t      numOfArbitrators = 0;
+  int32_t         numOfArbitrators = 0;
   if (arbmGetArbitratorListFromFile(pMgmt, &pCfgs, &numOfArbitrators) != 0) {
     dInfo("failed to get Arbitrator list from disk since %s", terrstr());
     return -1;
@@ -127,7 +249,7 @@ static int32_t arbmOpenArbitrators(SArbitratorMgmt *pMgmt) {
 
   if (pMgmt->state.openArbitrators != pMgmt->state.totalArbitrators) {
     dError("there are total Arbitrators:%d, opened:%d", pMgmt->state.totalArbitrators, pMgmt->state.openArbitrators);
-    terrno = TSDB_CODE_VND_INIT_FAILED;
+    terrno = TSDB_CODE_ARB_INIT_FAILED;
     return -1;
   }
 
@@ -142,8 +264,8 @@ static int32_t arbmOpenArbitrators(SArbitratorMgmt *pMgmt) {
 
 static void *arbmThreadFp(void *param) {
   SArbitratorMgmt *pMgmt = param;
-  int64_t     lastTime = 0;
-  setThreadName("arbitrator-timer");
+  int64_t          lastTime = 0;
+  setThreadName("arb-timer");
 
   while (1) {
     lastTime++;
@@ -153,7 +275,7 @@ static void *arbmThreadFp(void *param) {
 
     int64_t sec = lastTime / 10;
     if (sec % (ARBITRATOR_TIMEOUT_SEC / 2) == 0) {
-      //arbmCheckSyncTimeout(pMgmt);
+      // arbmCheckSyncTimeout(pMgmt);
     }
   }
 
@@ -165,7 +287,7 @@ static int32_t arbmInitTimer(SArbitratorMgmt *pMgmt) {
   taosThreadAttrInit(&thAttr);
   taosThreadAttrSetDetachState(&thAttr, PTHREAD_CREATE_JOINABLE);
   if (taosThreadCreate(&pMgmt->thread, &thAttr, arbmThreadFp, pMgmt) != 0) {
-    dError("failed to create vnode timer thread since %s", strerror(errno));
+    dError("failed to create arbitrator timer thread since %s", strerror(errno));
     return -1;
   }
 
@@ -219,7 +341,7 @@ _OVER:
   if (code == 0) {
     pOutput->pMgmt = pMgmt;
   } else {
-    dError("failed to init arbitrators-mgmt since %s", terrstr());
+    dError("failed to init arbitrator-mgmt since %s", terrstr());
     arbmCleanup(pMgmt);
   }
 
@@ -242,13 +364,14 @@ static void *arbmRestoreArbitratorInThread(void *param) {
   ASSERT(pArbitrator->pImpl);
 
   char stepDesc[TSDB_STEP_DESC_LEN] = {0};
-  snprintf(stepDesc, TSDB_STEP_DESC_LEN, "arbitratorId:%d, start to restore, %d of %d have been restored", pArbitrator->arbitratorId,
-           pMgmt->state.openArbitrators, pMgmt->state.totalArbitrators);
+  snprintf(stepDesc, TSDB_STEP_DESC_LEN, "arbitratorId:%d, start to restore, %d of %d have been restored",
+           pArbitrator->arbitratorId, pMgmt->state.openArbitrators, pMgmt->state.totalArbitrators);
   tmsgReportStartup("arbitrator-restore", stepDesc);
 
   int32_t code = arbitratorStart(pArbitrator->pImpl);
   if (code != 0) {
-    dError("arbitratorId:%d, failed to restore arbitrator by thread:%d", pArbitrator->arbitratorId, pThread->threadIndex);
+    dError("arbitratorId:%d, failed to restore arbitrator by thread:%d", pArbitrator->arbitratorId,
+           pThread->threadIndex);
     pThread->failed++;
   } else {
     dInfo("arbitratorId:%d, is restored by thread:%d", pArbitrator->arbitratorId, pThread->threadIndex);
@@ -304,10 +427,10 @@ static int32_t arbmStartArbitrators(SArbitratorMgmt *pMgmt) {
   }
   taosMemoryFree(threads);
 
-  // for (int32_t i = 0; i < numOfArbitrators; ++i) {
-  //   if (ppArbitrators == NULL || ppArbitrators[i] == NULL) continue;
-  //   arbmReleaseArbitrator(pMgmt, ppArbitrators[i]);
-  // }
+  for (int32_t i = 0; i < numOfArbitrators; ++i) {
+    if (ppArbitrators == NULL || ppArbitrators[i] == NULL) continue;
+    arbmReleaseArbitrator(pMgmt, ppArbitrators[i]);
+  }
 
   if (ppArbitrators != NULL) {
     taosMemoryFree(ppArbitrators);

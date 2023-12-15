@@ -220,6 +220,7 @@ int32_t mndSetCreateArbitratorRedoActions(STrans *pTrans, SDnodeObj *pDnode, SAr
 static int32_t mndSetCreateArbitratorUndoActions(STrans *pTrans, SDnodeObj *pDnode, SArbObj *pObj) {
   SDDropArbitratorReq dropReq = {0};
   dropReq.dnodeId = pDnode->id;
+  dropReq.arbitratorId = pObj->id;
 
   int32_t contLen = tSerializeSDCreateArbitratorReq(NULL, 0, &dropReq);
   void   *pReq = taosMemoryMalloc(contLen);
@@ -248,7 +249,7 @@ static int32_t mndCreateArbitrator(SMnode *pMnode, SRpcMsg *pReq, SDnodeObj *pDn
   int32_t code = -1;
 
   SArbObj arbitratorObj = {0};
-  arbitratorObj.id = sdbGetMaxId(pMnode->pSdb, SDB_ARBITRATOR);
+  arbitratorObj.id = pDnode->id;
   arbitratorObj.createdTime = taosGetTimestampMs();
   arbitratorObj.updateTime = arbitratorObj.createdTime;
 
@@ -338,6 +339,7 @@ static int32_t mndSetDropArbitratorCommitLogs(STrans *pTrans, SArbObj *pObj) {
 static int32_t mndSetDropArbitratorRedoActions(STrans *pTrans, SDnodeObj *pDnode, SArbObj *pObj) {
   SDDropArbitratorReq dropReq = {0};
   dropReq.dnodeId = pDnode->id;
+  dropReq.arbitratorId = pObj->id;
 
   int32_t contLen = tSerializeSDCreateArbitratorReq(NULL, 0, &dropReq);
   void   *pReq = taosMemoryMalloc(contLen);

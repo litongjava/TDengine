@@ -213,7 +213,7 @@ _OVER:
     for (int32_t i = 0; i < numOfArbitrators; ++i) {
       SArbitratorObj *pArbitrator = ppArbitrators[i];
       if (pArbitrator != NULL) {
-        // armbReleaseArbitrator(pMgmt, pArbitrator);
+        arbmReleaseArbitrator(pMgmt, pArbitrator);
       }
     }
     taosMemoryFree(ppArbitrators);

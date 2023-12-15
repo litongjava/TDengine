@@ -56,13 +56,7 @@ typedef struct {
   int8_t        disable;
   char         *path;
   SArbitrator  *pImpl;
-  SMultiWorker  pWriteW;
-  SMultiWorker  pSyncW;
-  SMultiWorker  pSyncRdW;
-  SMultiWorker  pApplyW;
-  STaosQueue   *pQueryQ;
-  STaosQueue   *pStreamQ;
-  STaosQueue   *pFetchQ;
+  SSingleWorker pWriteW;
 } SArbitratorObj;
 
 typedef struct {
@@ -75,14 +69,21 @@ typedef struct {
   SArbitratorObj  *pArbitrator;
 } SArbitratorThread;
 
+// arbmInt.c
+int32_t         arbmOpenArbitrator(SArbitratorMgmt *pMgmt, SArbWrapperCfg *pCfg, SArbitrator *pImpl);
+void            arbmCloseArbitrator(SArbitratorMgmt *pMgmt, SArbitratorObj *pArbitrator);
+SArbitratorObj *arbmAcquireArbitrator(SArbitratorMgmt *pMgmt, int32_t arbitratorId);
+SArbitratorObj *arbmAcquireArbitratorImpl(SArbitratorMgmt *pMgmt, int32_t arbitratorId, bool strict);
+void            arbmReleaseArbitrator(SArbitratorMgmt *pMgmt, SArbitratorObj *pArbitrator);
+
 // arbmHandle.c
 SArray *arbmGetMsgHandles();
 int32_t arbmProcessCreateReq(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg);
 int32_t arbmProcessDropReq(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg);
 
 // arbmFile.c
-int32_t          arbmGetArbitratorListFromFile(SArbitratorMgmt *pMgmt, SArbWrapperCfg **ppCfgs, int32_t *numOfArbitrators);
-int32_t          arbmWriteArbitratorListToFile(SArbitratorMgmt *pMgmt);
+int32_t arbmGetArbitratorListFromFile(SArbitratorMgmt *pMgmt, SArbWrapperCfg **ppCfgs, int32_t *numOfArbitrators);
+int32_t arbmWriteArbitratorListToFile(SArbitratorMgmt *pMgmt);
 SArbitratorObj **arbmGetArbitratorListFromHash(SArbitratorMgmt *pMgmt, int32_t *numOfArbitrators);
 
 // arbmWorker.c
@@ -91,6 +92,9 @@ int32_t arbmGetQueueSize(SArbitratorMgmt *pMgmt, int32_t vgId, EQueueType qtype)
 
 int32_t arbmStartWorker(SArbitratorMgmt *pMgmt);
 void    arbmStopWorker(SArbitratorMgmt *pMgmt);
+int32_t arbmAllocQueue(SArbitratorMgmt *pMgmt, SArbitratorObj *pArbitrator);
+void    arbmFreeQueue(SArbitratorMgmt *pMgmt, SArbitratorObj *pArbitrator);
+
 int32_t arbmPutNodeMsgToQueue(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg);
 
 #ifdef __cplusplus

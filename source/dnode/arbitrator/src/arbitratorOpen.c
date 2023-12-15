@@ -216,16 +216,15 @@ int32_t arbitratorCreate(const char *path, int32_t arbitratorId) {
   return 0;
 }
 
-void arbitratorDestroy(int32_t vgId, const char *path) {
+void arbitratorDestroy(const char *path) {
   arbInfo("path:%s is removed while destroy arbitrator", path);
   taosRemoveDir(path);
 }
 
-SArbitrator *arbitratorOpen(const char *path, SMsgCb msgCb, bool force) {
+SArbitrator *arbitratorOpen(const char *path, SMsgCb msgCb) {
   SArbitrator    *pArbitrator = NULL;
   SArbitratorInfo info = {0};
   char            dir[TSDB_FILENAME_LEN] = {0};
-  char            tdir[TSDB_FILENAME_LEN * 2] = {0};
   int32_t         ret = 0;
   terrno = TSDB_CODE_SUCCESS;
 

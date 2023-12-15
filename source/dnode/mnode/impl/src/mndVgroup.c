@@ -852,7 +852,7 @@ static int32_t mndGetAvailableDnode(SMnode *pMnode, SDbObj *pDb, SVgObj *pVgroup
 
 static int32_t mndGetAvailableArbitrator(SVgObj *pVgroup, SArray *pArray) {
   if (taosArrayGetSize(pArray) == 0) {
-    terrno = TSDB_CODE_ARBITRATOR_NO_ENOUGH_NODE;
+    terrno = TSDB_CODE_ARB_NO_ENOUGH_NODE;
     return -1;
   }
 
@@ -865,7 +865,7 @@ static int32_t mndGetAvailableArbitrator(SVgObj *pVgroup, SArray *pArray) {
 
   SArbObj *pArbitrator = taosArrayGet(pArray, 0);
   if (pArbitrator == NULL) {
-    terrno = TSDB_CODE_ARBITRATOR_NO_ENOUGH_NODE;
+    terrno = TSDB_CODE_ARB_NO_ENOUGH_NODE;
     return -1;
   }
   pVgroup->arbitratorId = pArbitrator->id;
