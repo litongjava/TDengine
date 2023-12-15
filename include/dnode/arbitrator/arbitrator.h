@@ -32,25 +32,16 @@ extern "C" {
 // clang-format on
 
 /* ------------------------ TYPES EXPOSED ------------------------ */
-typedef struct SArbitrator SArbitrator;
-typedef struct SArbitratorCfg SArbitratorCfg;
+typedef struct SArbitrator    SArbitrator;
 
 /* ------------------------ SArbitrator ------------------------ */
-
 SArbitrator *arbitratorOpen(const char *path, SMsgCb msgCb);
 void         arbitratorClose(SArbitrator *pArbitrator);
-void         arbitratorDestroy(const char *path);
 
 int32_t arbitratorCreate(const char *path, int32_t arbitratorId);
-
-int32_t arbitratorStart(SArbitrator *pArbitrator);
-void    arbitratorStop(SArbitrator *pArbitrator);
+void    arbitratorDestroy(const char *path);
 
 void arbitratorProcessQueue(SArbitrator *pArbitrator, SRpcMsg *pMsg);
-
-struct SArbitratorCfg {
-  int32_t arbitratorId;
-};
 
 #ifdef __cplusplus
 }

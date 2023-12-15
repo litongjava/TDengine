@@ -3970,11 +3970,6 @@ int32_t tDeserializeSViewMetaRsp(void* buf, int32_t bufLen, SViewMetaRsp* pRsp);
 void    tFreeSViewMetaRsp(SViewMetaRsp* pRsp);
 
 typedef struct {
-  int32_t openArbitrators;
-  int32_t totalArbitrators;
-} SArbitratorsStat;
-
-typedef struct {
   int32_t  vgId;
   int8_t   replica;
   SReplica replicas[TSDB_MAX_REPLICA];

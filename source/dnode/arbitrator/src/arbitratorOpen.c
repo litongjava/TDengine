@@ -238,12 +238,6 @@ SArbitrator *arbitratorOpen(const char *path, SMsgCb msgCb) {
     return NULL;
   }
 
-  if (taosMkDir(path)) {
-    arbError("arbitratorId:%d, failed to prepare arbitrator dir since %s, path: %s", info.arbitratorId, strerror(errno),
-             path);
-    return NULL;
-  }
-
   // create handle
   pArbitrator = taosMemoryCalloc(1, sizeof(*pArbitrator) + strlen(path) + 1);
   if (pArbitrator == NULL) {
@@ -252,7 +246,9 @@ SArbitrator *arbitratorOpen(const char *path, SMsgCb msgCb) {
     return NULL;
   }
 
+  strcpy(pArbitrator->path, path);
   pArbitrator->arbitratorId = info.arbitratorId;
+  pArbitrator->msgCb = msgCb;
 
   return pArbitrator;
 
@@ -266,12 +262,3 @@ void arbitratorClose(SArbitrator *pArbitrator) {
     taosMemoryFree(pArbitrator);
   }
 }
-
-// start the sync timer after the queue is ready
-int32_t arbitratorStart(SArbitrator *pArbitrator) {
-  return -1;
-  // ASSERT(pArbitrator);
-  // return arbitratorSyncStart(pArbitrator);
-}
-
-void arbitratorStop(SArbitrator *pArbitrator) {}

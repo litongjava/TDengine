@@ -41,8 +41,8 @@ struct SArbitratorInfo {
 
 struct SArbitrator {
   int32_t arbitratorId;
-  // SMsgCb    msgCb;
-  // SQHandle* pQuery;
+  SMsgCb  msgCb;
+  char    path[];
 };
 
 #ifdef __cplusplus

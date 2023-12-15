@@ -53,12 +53,6 @@ int32_t arbmProcessCreateReq(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg) {
     goto _OVER;
   }
 
-  // code = arbitratorStart(pImpl);
-  // if (code != 0) {
-  //   dError("arbitratorId:%d, failed to start sync since %s", arbId, terrstr());
-  //   goto _OVER;
-  // }
-
   code = arbmWriteArbitratorListToFile(pMgmt);
   if (code != 0) {
     code = terrno;

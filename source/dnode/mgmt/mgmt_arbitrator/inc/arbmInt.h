@@ -27,13 +27,16 @@ extern "C" {
 #define ARB_MGMT_INFO_FNAME     "arbitrators.json"
 #define ARB_MGMT_INFO_FNAME_TMP "arbitrators_tmp.json"
 
-typedef struct SArbitratorMgmt {
+typedef struct {
+  int32_t openArbitrators;
+  int32_t totalArbitrators;
+} SArbitratorsStat;
+
+typedef struct {
   SDnodeData      *pData;
   SMsgCb           msgCb;
   const char      *path;
   const char      *name;
-  SQWorkerPool     queryPool;
-  SWWorkerPool     fetchPool;
   SSingleWorker    mgmtWorker;
   SHashObj        *hash;
   TdThreadRwlock   lock;
@@ -53,7 +56,6 @@ typedef struct {
   int32_t       refCount;
   int8_t        dropped;
   int8_t        failed;
-  int8_t        disable;
   char         *path;
   SArbitrator  *pImpl;
   SSingleWorker pWriteW;
