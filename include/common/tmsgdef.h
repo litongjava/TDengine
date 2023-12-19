@@ -196,6 +196,7 @@ enum { // WARN: new msg should be appended to segment tail
   TD_DEF_MSG_TYPE(TDMT_MND_VIEW_META, "view-meta", NULL, NULL)
   TD_DEF_MSG_TYPE(TDMT_MND_CREATE_ARBITRATOR, "create-arbitrator", NULL, NULL)
   TD_DEF_MSG_TYPE(TDMT_MND_DROP_ARBITRATOR, "drop-arbitrator", NULL, NULL)
+  TD_DEF_MSG_TYPE(TDMT_MND_GET_ARBITRATORS, "get-arbitrator-vgroups", NULL, NULL)
   TD_DEF_MSG_TYPE(TDMT_MND_MAX_MSG, "mnd-max", NULL, NULL)
 
   TD_NEW_MSG_SEG(TDMT_VND_MSG)  // 2<<8
@@ -335,7 +336,6 @@ enum { // WARN: new msg should be appended to segment tail
   TD_DEF_MSG_TYPE(TDMT_VND_TMQ_MAX_MSG, "vnd-tmq-max", NULL, NULL)
 
   TD_NEW_MSG_SEG(TDMT_ARB_MSG)  //9 << 8
-  TD_DEF_MSG_TYPE(TDMT_ARB_REGISTER_VGROUP, "arbitrator-register", SMqRebVgReq, SMqRebVgRsp)
 
 #if defined(TD_MSG_NUMBER_)
   TDMT_MAX

@@ -39,6 +39,43 @@ static void arbmProcessQueue(SQueueInfo *pInfo, SRpcMsg *pMsg) {
     case TDMT_DND_DROP_ARBITRATOR:
       code = arbmProcessDropReq(pMgmt, pMsg);
       break;
+    case TDMT_MND_GET_ARBITRATORS_RSP:
+      code = arbmProcessGetAribtratorVgIdsRsp(pMgmt, pMsg);
+      break;
+    default:
+      terrno = TSDB_CODE_MSG_NOT_PROCESSED;
+      dGError("msg:%p, not processed in arbitrator-mgmt queue", pMsg);
+  }
+
+  if (IsReq(pMsg)) {
+    if (code != 0) {
+      if (terrno != 0) code = terrno;
+      dGError("msg:%p, failed to process since %s, type:%s", pMsg, tstrerror(code), TMSG_INFO(pMsg->msgType));
+    }
+    arbmSendRsp(pMsg, code);
+  }
+
+  dGTrace("msg:%p, is freed, code:0x%x", pMsg, code);
+  rpcFreeCont(pMsg->pCont);
+  taosFreeQitem(pMsg);
+}
+
+static void arbmProcessQueueByArbId(SQueueInfo *pInfo, SRpcMsg *pMsg) {
+  SArbitratorMgmt *pMgmt = pInfo->ahandle;
+  int32_t          code = -1;
+  const STraceId  *trace = &pMsg->info.traceId;
+
+  dGTrace("msg:%p, get from arbitrator-mgmt queue", pMsg);
+  switch (pMsg->msgType) {
+    case TDMT_DND_CREATE_ARBITRATOR:
+      code = arbmProcessCreateReq(pMgmt, pMsg);
+      break;
+    case TDMT_DND_DROP_ARBITRATOR:
+      code = arbmProcessDropReq(pMgmt, pMsg);
+      break;
+    case TDMT_MND_GET_ARBITRATORS_RSP:
+      code = arbmProcessGetAribtratorVgIdsRsp(pMgmt, pMsg);
+      break;
     default:
       terrno = TSDB_CODE_MSG_NOT_PROCESSED;
       dGError("msg:%p, not processed in arbitrator-mgmt queue", pMsg);
@@ -63,6 +100,10 @@ static int32_t arbmPutNodeMsgToWorker(SSingleWorker *pWorker, SRpcMsg *pMsg) {
   return 0;
 }
 
+int32_t arbmPutNodeMsgToArbQueue(SArbitratorObj *pArbObj, SRpcMsg *pMsg) {
+  return arbmPutNodeMsgToWorker(&pArbObj->worker, pMsg);
+}
+
 int32_t arbmPutNodeMsgToQueue(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg) {
   return arbmPutNodeMsgToWorker(&pMgmt->mgmtWorker, pMsg);
 }
@@ -85,20 +126,20 @@ int32_t arbmGetQueueSize(SArbitratorMgmt *pMgmt, int32_t vgId, EQueueType qtype)
 int32_t arbObjStartWorker(SArbitratorObj *pArbObj) {
   SSingleWorkerCfg wcfg = {
       .min = 1, .max = 1, .name = "arb-worker", .fp = (FItem)arbitratorProcessQueue, .param = pArbObj->pImpl};
-  (void)tSingleWorkerInit(&pArbObj->pWriteW, &wcfg);
+  (void)tSingleWorkerInit(&pArbObj->worker, &wcfg);
 
-  if (pArbObj->pWriteW.queue == NULL) {
+  if (pArbObj->worker.queue == NULL) {
     terrno = TSDB_CODE_OUT_OF_MEMORY;
     return -1;
   }
 
   dInfo("arbitratorId:%d, write-queue:%p is alloced, thread:%08" PRId64, pArbObj->arbitratorId,
-        pArbObj->pWriteW.queue, pArbObj->pWriteW.queue->threadId);
+        pArbObj->worker.queue, pArbObj->worker.queue->threadId);
   return 0;
 }
 
 void arbObjStopWorker(SArbitratorObj *pArbObj) {
-  tSingleWorkerCleanup(&pArbObj->pWriteW);
+  tSingleWorkerCleanup(&pArbObj->worker);
   dDebug("arbitratorId:%d, queue is freed", pArbObj->arbitratorId);
 }
 

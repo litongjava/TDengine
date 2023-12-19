@@ -28,6 +28,7 @@
 #include "mndTrans.h"
 #include "mndUser.h"
 #include "mndVgroup.h"
+#include "mndArbitrator.h"
 #include "mndView.h"
 #include "systable.h"
 #include "tjson.h"
@@ -680,11 +681,28 @@ static int32_t mndCreateDb(SMnode *pMnode, SRpcMsg *pReq, SCreateDbReq *pCreate,
   if (mndSetCreateDbUndoLogs(pMnode, pTrans, &dbObj, pVgroups) != 0) goto _OVER;
   if (mndSetCreateDbCommitLogs(pMnode, pTrans, &dbObj, pVgroups, pNewUserDuped) != 0) goto _OVER;
   if (mndSetCreateDbUndoActions(pMnode, pTrans, &dbObj, pVgroups) != 0) goto _OVER;
+
+  SArbObj *pArbObj = NULL;
+  if (dbObj.cfg.withArbitrator) {
+    for (int i = 0; i < dbObj.cfg.numOfVgroups; i++) {
+      pArbObj = mndAcquireArbitrator(pMnode, pVgroups[i].arbitratorId);
+      pArbObj->updateTime = taosGetTimestampMs();
+      pArbObj->numOfVgroups++;
+      if (taosArrayPush(pArbObj->vgIds, &pVgroups[i].vgId) == NULL) goto _OVER;
+
+      if (mndSetCreateArbitratorCommitLogs(pTrans, pArbObj) != 0) goto _OVER;
+
+      mndReleaseArbitrator(pMnode, pArbObj);
+      pArbObj = NULL;
+    }
+  }
+
   if (mndTransPrepare(pMnode, pTrans) != 0) goto _OVER;
 
   code = 0;
 
 _OVER:
+  mndReleaseArbitrator(pMnode, pArbObj);
   taosMemoryFree(pVgroups);
   mndUserFreeObj(&newUserObj);
   mndTransDrop(pTrans);

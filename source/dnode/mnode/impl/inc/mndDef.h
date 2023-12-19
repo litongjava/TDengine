@@ -251,9 +251,10 @@ typedef struct {
 
 typedef struct {
   int32_t    id;
-  int32_t    numOfVgroups;
   int64_t    createdTime;
   int64_t    updateTime;
+  int32_t    numOfVgroups;
+  SArray*    vgIds; // int32_t
   SDnodeObj* pDnode;
 } SArbObj;
 

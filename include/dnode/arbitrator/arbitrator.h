@@ -17,6 +17,7 @@
 #define _TD_ARBITRATOR_H_
 
 #include "tmsgcb.h"
+#include "tqueue.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,7 +33,7 @@ extern "C" {
 // clang-format on
 
 /* ------------------------ TYPES EXPOSED ------------------------ */
-typedef struct SArbitrator    SArbitrator;
+typedef struct SArbitrator SArbitrator;
 
 /* ------------------------ SArbitrator ------------------------ */
 SArbitrator *arbitratorOpen(const char *path, SMsgCb msgCb);
@@ -41,7 +42,7 @@ void         arbitratorClose(SArbitrator *pArbitrator);
 int32_t arbitratorCreate(const char *path, int32_t arbitratorId);
 void    arbitratorDestroy(const char *path);
 
-void arbitratorProcessQueue(SArbitrator *pArbitrator, SRpcMsg *pMsg);
+void arbitratorProcessQueue(SQueueInfo *pInfo, SRpcMsg *pMsg);
 
 #ifdef __cplusplus
 }

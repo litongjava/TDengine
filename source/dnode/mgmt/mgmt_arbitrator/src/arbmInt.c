@@ -129,7 +129,7 @@ void arbmCloseArbitrator(SArbitratorMgmt *pMgmt, SArbitratorObj *pArbObj) {
   while (pArbObj->refCount > 0) taosMsleep(10);
 
   dInfo("arbitratorId:%d, wait for arbitrator write queue:%p is empty, thread:%08" PRId64, pArbObj->arbitratorId,
-        pArbObj->pWriteW.queue, pArbObj->pWriteW.queue->threadId);
+        pArbObj->worker.queue, pArbObj->worker.queue->threadId);
   arbObjStopWorker(pArbObj);
 
   dInfo("arbitratorId:%d, all arbitrator queues is empty", pArbObj->arbitratorId);
@@ -257,6 +257,23 @@ static int32_t arbmOpenArbitrators(SArbitratorMgmt *pMgmt) {
   return 0;
 }
 
+static void vmGetArbitrators(SArbitratorMgmt *pMgmt) {
+  SMGetArbitratorsReq getArbReq = {0};
+
+  int32_t contLen = tSerializeSMGetArbitratorsReq(NULL, 0, &getArbReq);
+  if (contLen <= 0) {
+    // TODO(LSG): ERR
+  }
+  void *pReq = rpcMallocCont(contLen);
+  if (pReq == NULL) {
+    // TODO(LSG): ERR
+  }
+
+  getArbReq.dnodeId = pMgmt->pData->dnodeId;
+  tSerializeSMGetArbitratorsReq(pReq, contLen, &getArbReq);
+
+}
+
 static void *arbmThreadFp(void *param) {
   SArbitratorMgmt *pMgmt = param;
   int64_t          lastTime = 0;
@@ -270,7 +287,7 @@ static void *arbmThreadFp(void *param) {
 
     int64_t sec = lastTime / 10;
     if (sec % (ARBITRATOR_TIMEOUT_SEC / 2) == 0) {
-      // arbmCheckSyncTimeout(pMgmt);
+      vmGetArbitrators(pMgmt);
     }
   }
 

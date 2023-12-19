@@ -58,7 +58,7 @@ typedef struct {
   int8_t        failed;
   char         *path;
   SArbitrator  *pImpl;
-  SSingleWorker pWriteW;
+  SSingleWorker worker;
 } SArbitratorObj;
 
 typedef struct {
@@ -82,6 +82,7 @@ void            arbmReleaseArbitrator(SArbitratorMgmt *pMgmt, SArbitratorObj *pA
 SArray *arbmGetMsgHandles();
 int32_t arbmProcessCreateReq(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg);
 int32_t arbmProcessDropReq(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg);
+int32_t arbmProcessGetAribtratorVgIdsRsp(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg);
 
 // arbmFile.c
 int32_t arbmGetArbitratorListFromFile(SArbitratorMgmt *pMgmt, SArbWrapperCfg **ppCfgs, int32_t *numOfArbitrators);
@@ -97,6 +98,7 @@ void    arbmStopWorker(SArbitratorMgmt *pMgmt);
 int32_t arbObjStartWorker(SArbitratorObj *pArbitrator);
 void    arbObjStopWorker(SArbitratorObj *pArbitrator);
 
+int32_t arbmPutNodeMsgToArbQueue(SArbitratorObj *pMgmt, SRpcMsg *pMsg);
 int32_t arbmPutNodeMsgToQueue(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg);
 
 #ifdef __cplusplus

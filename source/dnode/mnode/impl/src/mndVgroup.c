@@ -329,16 +329,16 @@ void *mndBuildCreateVnodeReq(SMnode *pMnode, SDnodeObj *pDnode, SDbObj *pDb, SVg
     }
   }
 
-  SArbInfo *pArbitrator = &createReq.arbitrator;
-  pArbitrator->arbitratorId = pVgroup->arbitratorId;
+  SArbitratorEp *pArbEp = &createReq.arbitrator;
+  pArbEp->arbitratorId = pVgroup->arbitratorId;
   if (pVgroup->arbitratorId != -1) {
     SArbObj *pVgArbitrator = mndAcquireArbitrator(pMnode, pVgroup->arbitratorId);
     if (pVgArbitrator == NULL) {
       return NULL;
     }
 
-    pArbitrator->port = pVgArbitrator->pDnode->port;
-    memcpy(pArbitrator->fqdn, pVgArbitrator->pDnode->fqdn, TSDB_FQDN_LEN);
+    pArbEp->port = pVgArbitrator->pDnode->port;
+    memcpy(pArbEp->fqdn, pVgArbitrator->pDnode->fqdn, TSDB_FQDN_LEN);
     mndReleaseArbitrator(pMnode, pVgArbitrator);
   }
 

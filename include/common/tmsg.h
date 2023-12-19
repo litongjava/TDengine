@@ -1621,55 +1621,55 @@ typedef struct {
   int32_t  arbitratorId;
   uint16_t port;                 // node arb Port
   char     fqdn[TSDB_FQDN_LEN];  // node FQDN
-} SArbInfo;
+} SArbitratorEp;
 
 typedef struct {
-  int32_t  vgId;
-  char     db[TSDB_DB_FNAME_LEN];
-  int64_t  dbUid;
-  int32_t  vgVersion;
-  int32_t  numOfStables;
-  int32_t  buffer;
-  int32_t  pageSize;
-  int32_t  pages;
-  int32_t  cacheLastSize;
-  int32_t  daysPerFile;
-  int32_t  daysToKeep0;
-  int32_t  daysToKeep1;
-  int32_t  daysToKeep2;
-  int32_t  keepTimeOffset;
-  int32_t  minRows;
-  int32_t  maxRows;
-  int32_t  walFsyncPeriod;
-  uint32_t hashBegin;
-  uint32_t hashEnd;
-  int8_t   hashMethod;
-  int8_t   walLevel;
-  int8_t   precision;
-  int8_t   compression;
-  int8_t   strict;
-  int8_t   cacheLast;
-  int8_t   isTsma;
-  int8_t   replica;
-  int8_t   selfIndex;
-  SReplica replicas[TSDB_MAX_REPLICA];
-  int32_t  numOfRetensions;
-  SArray*  pRetensions;  // SRetention
-  void*    pTsma;
-  int32_t  walRetentionPeriod;
-  int64_t  walRetentionSize;
-  int32_t  walRollPeriod;
-  int64_t  walSegmentSize;
-  int16_t  sstTrigger;
-  int16_t  hashPrefix;
-  int16_t  hashSuffix;
-  int32_t  tsdbPageSize;
-  int64_t  reserved[8];
-  int8_t   learnerReplica;
-  int8_t   learnerSelfIndex;
-  SReplica learnerReplicas[TSDB_MAX_LEARNER_REPLICA];
-  int32_t  changeVersion;
-  SArbInfo arbitrator;
+  int32_t       vgId;
+  char          db[TSDB_DB_FNAME_LEN];
+  int64_t       dbUid;
+  int32_t       vgVersion;
+  int32_t       numOfStables;
+  int32_t       buffer;
+  int32_t       pageSize;
+  int32_t       pages;
+  int32_t       cacheLastSize;
+  int32_t       daysPerFile;
+  int32_t       daysToKeep0;
+  int32_t       daysToKeep1;
+  int32_t       daysToKeep2;
+  int32_t       keepTimeOffset;
+  int32_t       minRows;
+  int32_t       maxRows;
+  int32_t       walFsyncPeriod;
+  uint32_t      hashBegin;
+  uint32_t      hashEnd;
+  int8_t        hashMethod;
+  int8_t        walLevel;
+  int8_t        precision;
+  int8_t        compression;
+  int8_t        strict;
+  int8_t        cacheLast;
+  int8_t        isTsma;
+  int8_t        replica;
+  int8_t        selfIndex;
+  SReplica      replicas[TSDB_MAX_REPLICA];
+  int32_t       numOfRetensions;
+  SArray*       pRetensions;  // SRetention
+  void*         pTsma;
+  int32_t       walRetentionPeriod;
+  int64_t       walRetentionSize;
+  int32_t       walRollPeriod;
+  int64_t       walSegmentSize;
+  int16_t       sstTrigger;
+  int16_t       hashPrefix;
+  int16_t       hashSuffix;
+  int32_t       tsdbPageSize;
+  int64_t       reserved[8];
+  int8_t        learnerReplica;
+  int8_t        learnerSelfIndex;
+  SReplica      learnerReplicas[TSDB_MAX_LEARNER_REPLICA];
+  int32_t       changeVersion;
+  SArbitratorEp arbitrator;
 } SCreateVnodeReq;
 
 int32_t tSerializeSCreateVnodeReq(void* buf, int32_t bufLen, SCreateVnodeReq* pReq);
@@ -2076,6 +2076,33 @@ typedef struct {
 
 int32_t tSerializeSDCreateArbitratorReq(void* buf, int32_t bufLen, SDCreateArbitratorReq* pReq);
 int32_t tDeserializeSDCreateArbitratorReq(void* buf, int32_t bufLen, SDCreateArbitratorReq* pReq);
+
+typedef struct {
+  int32_t dnodeId;
+} SMGetArbitratorsReq;
+
+int32_t tSerializeSMGetArbitratorsReq(void* buf, int32_t bufLen, SMGetArbitratorsReq* pReq);
+int32_t tDeserializeSMGetArbitratorsReq(void* buf, int32_t bufLen, SMGetArbitratorsReq* pReq);
+
+typedef struct {
+  int32_t  vgId;
+  int8_t   replica;
+  SReplica replicas[TSDB_MAX_REPLICA];
+} SArbitratorVgroupInfo;
+
+typedef struct {
+  int32_t arbId;
+  SArray* vgroups; // SArbitratorVgroupInfo
+} SArbitratorVgroups;
+
+typedef struct {
+  int32_t dnodeId;
+  SArray* arbVgroups; // SArbitratorVgroups
+} SMGetArbitratorsRsp;
+
+int32_t tSerializeSMGetArbitratorsRsp(void* buf, int32_t bufLen, SMGetArbitratorsRsp* pReq);
+int32_t tDeserializeSMGetArbitratorsRsp(void* buf, int32_t bufLen, SMGetArbitratorsRsp* pReq);
+void    tFreeSMGetArbitratorsRsp(SMGetArbitratorsRsp* pRsp);
 
 typedef struct {
   char queryStrId[TSDB_QUERY_ID_LEN];
@@ -3968,25 +3995,6 @@ typedef struct {
 int32_t tSerializeSViewMetaRsp(void* buf, int32_t bufLen, const SViewMetaRsp* pRsp);
 int32_t tDeserializeSViewMetaRsp(void* buf, int32_t bufLen, SViewMetaRsp* pRsp);
 void    tFreeSViewMetaRsp(SViewMetaRsp* pRsp);
-
-typedef struct {
-  int32_t  vgId;
-  int8_t   replica;
-  SReplica replicas[TSDB_MAX_REPLICA];
-  int8_t   learnerReplica;
-  SReplica learnerReplicas[TSDB_MAX_LEARNER_REPLICA];
-  int32_t  arbitratorId;
-} SRegisterToArbitratorReq;
-
-int32_t tSerializeSRegisterToArbitratorReq(void* buf, int32_t bufLen, SRegisterToArbitratorReq* pReq);
-int32_t tDeserializeSRegisterToArbitratorReq(void* buf, int32_t bufLen, SRegisterToArbitratorReq* pReq);
-int32_t tFreeSRegisterToArbitratorReq(SRegisterToArbitratorReq* pReq);
-
-typedef struct {
-} SUnregisterToArbitratorReq;
-
-int32_t tSerializeSUnregisterToArbitratorReq(void* buf, int32_t bufLen, SUnregisterToArbitratorReq* pReq);
-int32_t tDeserializeSUnregisterToArbitratorReq(void* buf, int32_t bufLen, SUnregisterToArbitratorReq* pReq);
 
 #pragma pack(pop)
 

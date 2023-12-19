@@ -109,15 +109,41 @@ int32_t arbmProcessDropReq(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg) {
   return 0;
 }
 
+int32_t arbmProcessGetAribtratorVgIdsRsp(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg) {
+  SMGetArbitratorsRsp getRsp = {0};
+  if (tDeserializeSMGetArbitratorsRsp(pMsg->pCont, pMsg->contLen, &getRsp) != 0) {
+    terrno = TSDB_CODE_INVALID_MSG;
+    return -1;
+  }
+
+  if (getRsp.dnodeId != pMgmt->pData->dnodeId) {
+    terrno = TSDB_CODE_INVALID_MSG;
+    dError("dnodeId:%d not matched with local dnode", getRsp.dnodeId);
+    return -1;
+  }
+
+  // SArbitratorObj *pArbObj = arbmAcquireArbitratorImpl(pMgmt, arbitratorId, false);
+  // if (pArbObj == NULL) {
+  //   dInfo("arbitratorId:%d, failed to drop since %s", arbitratorId, terrstr());
+  //   terrno = TSDB_CODE_ARB_NOT_EXIST;
+  //   return -1;
+  // }
+
+  // arbmPutNodeMsgToWorker(pArbObj->worker, pMsg);
+
+  // dInfo("arbitratorId:%d, is dropped", arbitratorId);
+  return 0;
+}
+
 SArray *arbmGetMsgHandles() {
   int32_t code = -1;
   SArray *pArray = taosArrayInit(16, sizeof(SMgmtHandle));
   if (pArray == NULL) goto _OVER;
 
   // Requests handled by ARBITRATOR
-  // if (dmSetMgmtHandle(pArray, TDMT_ARB_REGISTER_VGROUP, arbmPutNodeMsgToQueue, 0) == NULL) goto _OVER;
   if (dmSetMgmtHandle(pArray, TDMT_DND_CREATE_ARBITRATOR, arbmPutNodeMsgToQueue, 0) == NULL) goto _OVER;
   if (dmSetMgmtHandle(pArray, TDMT_DND_DROP_ARBITRATOR, arbmPutNodeMsgToQueue, 0) == NULL) goto _OVER;
+  if (dmSetMgmtHandle(pArray, TDMT_MND_GET_ARBITRATORS_RSP, arbmPutNodeMsgToQueue, 0) == NULL) goto _OVER;
 
   code = 0;
 _OVER:

@@ -14,19 +14,21 @@
  */
 
 #include "arbInt.h"
-#include "tqueue.h"
 
-void arbitratorProcessQueue(SArbitrator *pArbitrator, SRpcMsg *pMsg) {
+int32_t arbitratorProcessGetAribtratorVgIdsRsp(SArbitrator *pArb, SRpcMsg *pMsg) { return -1; }
+
+void arbitratorProcessQueue(SQueueInfo *pInfo, SRpcMsg *pMsg) {
+  SArbitrator *pArb = pInfo->ahandle;
   int32_t          code = -1;
 
-  arbTrace("msg:%p, get from arb-worker queue", pMsg);
+  arbTrace("msg:%p, get from arbitrator-mgmt queue", pMsg);
   switch (pMsg->msgType) {
-    case TDMT_DND_CREATE_ARBITRATOR:
-      code = 0;
+    case TDMT_MND_GET_ARBITRATORS_RSP:
+      code = arbitratorProcessGetAribtratorVgIdsRsp(pArb, pMsg);
       break;
     default:
       terrno = TSDB_CODE_MSG_NOT_PROCESSED;
-      arbError("msg:%p, not processed in arb-worker queue", pMsg);
+      arbError("msg:%p, not processed in arbitrator-mgmt queue", pMsg);
   }
 
   if (IsReq(pMsg)) {
