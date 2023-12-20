@@ -287,7 +287,7 @@ static void *arbmThreadFp(void *param) {
 
     int64_t sec = lastTime / 10;
     if (sec % (ARBITRATOR_TIMEOUT_SEC / 2) == 0) {
-      vmGetArbitrators(pMgmt);
+      arbmSendGetArbitratorsReq(pMgmt);
     }
   }
 

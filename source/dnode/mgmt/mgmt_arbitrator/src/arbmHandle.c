@@ -109,30 +109,55 @@ int32_t arbmProcessDropReq(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg) {
   return 0;
 }
 
-int32_t arbmProcessGetAribtratorVgIdsRsp(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg) {
+static void arbmProcessGetAribtratorVgIdsRsp(SArbitratorMgmt *pMgmt, SRpcMsg *pRsp) {
   SMGetArbitratorsRsp getRsp = {0};
-  if (tDeserializeSMGetArbitratorsRsp(pMsg->pCont, pMsg->contLen, &getRsp) != 0) {
-    terrno = TSDB_CODE_INVALID_MSG;
-    return -1;
+  if (tDeserializeSMGetArbitratorsRsp(pRsp->pCont, pRsp->contLen, &getRsp)) {
+    dError("failed to deserialize get-arbitrators rsp since %s", terrstr());
+    goto _OVER;
   }
 
   if (getRsp.dnodeId != pMgmt->pData->dnodeId) {
-    terrno = TSDB_CODE_INVALID_MSG;
-    dError("dnodeId:%d not matched with local dnode", getRsp.dnodeId);
-    return -1;
+
   }
 
-  // SArbitratorObj *pArbObj = arbmAcquireArbitratorImpl(pMgmt, arbitratorId, false);
-  // if (pArbObj == NULL) {
-  //   dInfo("arbitratorId:%d, failed to drop since %s", arbitratorId, terrstr());
-  //   terrno = TSDB_CODE_ARB_NOT_EXIST;
-  //   return -1;
-  // }
 
-  // arbmPutNodeMsgToWorker(pArbObj->worker, pMsg);
+ _OVER:
+  tFreeSMGetArbitratorsRsp(&getRsp);
+  rpcFreeCont(pRsp->pCont);
+}
 
-  // dInfo("arbitratorId:%d, is dropped", arbitratorId);
-  return 0;
+void arbmSendGetArbitratorsReq(SArbitratorMgmt *pMgmt) {
+  SMGetArbitratorsReq req = {0};
+
+  taosThreadRwlockRdlock(&pMgmt->pData->lock);
+  req.dnodeId = pMgmt->pData->dnodeId;
+  taosThreadRwlockUnlock(&pMgmt->pData->lock);
+
+  int32_t contLen = tSerializeSMGetArbitratorsReq(NULL, 0, &req);
+  void   *pHead = rpcMallocCont(contLen);
+  tSerializeSMGetArbitratorsReq(pHead, contLen, &req);
+
+  SRpcMsg rpcMsg = {.pCont = pHead,
+                    .contLen = contLen,
+                    .msgType = TDMT_MND_GET_ARBITRATORS,
+                    .info.ahandle = (void *)0x9527,
+                    .info.refId = 0,
+                    .info.noResp = 0};
+  SRpcMsg rpcRsp = {0};
+
+  dTrace("send get-arbitrators req to mnode, dnodeId:%d", req.dnodeId);
+
+  SEpSet epSet = {0};
+  dmGetMnodeEpSet(pMgmt->pData, &epSet);
+  rpcSendRecvWithTimeout(pMgmt->msgCb.clientRpc, &epSet, &rpcMsg, &rpcRsp, 5000);
+  if (rpcRsp.code != 0) {
+    dmRotateMnodeEpSet(pMgmt->pData);
+    char tbuf[256];
+    dmEpSetToStr(tbuf, sizeof(tbuf), &epSet);
+    dError("failed to send get-arbitrators req since %s, epSet:%s, inUse:%d", tstrerror(rpcRsp.code), tbuf,
+           epSet.inUse);
+  }
+  arbmProcessGetAribtratorVgIdsRsp(pMgmt, &rpcRsp);
 }
 
 SArray *arbmGetMsgHandles() {

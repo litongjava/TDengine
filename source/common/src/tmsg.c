@@ -5765,26 +5765,35 @@ int32_t tSerializeSMGetArbitratorsRsp(void *buf, int32_t bufLen, SMGetArbitrator
   return tlen;
 }
 
-int32_t tDeserializeSMGetArbitratorsRsp(void *buf, int32_t bufLen, SMGetArbitratorsRsp *pReq) {
-  // SDecoder decoder = {0};
-  // tDecoderInit(&decoder, buf, bufLen);
+int32_t tDeserializeSMGetArbitratorsRsp(void *buf, int32_t bufLen, SMGetArbitratorsRsp *pRsp) {
+  SDecoder decoder = {0};
+  tDecoderInit(&decoder, buf, bufLen);
 
-  // if (tStartDecode(&decoder) < 0) return -1;
-  // if (tDecodeI32(&decoder, &pReq->dnodeId) < 0) return -1;
-  // if (tDecodeI32(&decoder, &pReq->arbitratorId) < 0) return -1;
+  if (tStartDecode(&decoder) < 0) return -1;
+  if (tDecodeI32(&decoder, &pRsp->dnodeId) < 0) return -1;
 
-  // int32_t num = 0;
-  // if (tDecodeI32(&decoder, &num) < 0) return -1;
-  // pReq->vgIds = taosArrayInit(num, sizeof(int32_t));
-  // for (int i=0; i< num; i++) {
-  //   int vgId = -1;
-  //   if (tDecodeI32(&decoder, &vgId) < 0) return -1;
-  //   if (taosArrayPush(pReq->vgIds, &vgId) == NULL) return -1;
-  // }
+  int32_t arbNum = 0;
+  if (tDecodeI32(&decoder, &arbNum) < 0) return -1;
+  pRsp->arbVgroups = taosArrayInit(arbNum, sizeof(SArbitratorVgroups));
+  for (int i = 0; i < arbNum; i++) {
+    SArbitratorVgroups *pArbVgroups = taosArrayGet(pRsp->arbVgroups, i);
+    if (tDecodeI32(&decoder, &pArbVgroups->arbId) < 0) return -1;
+    int32_t vgNum = 0;
+    if (tDecodeI32(&decoder, &vgNum) < 0) return -1;
+    pArbVgroups->vgroups = taosArrayInit(vgNum, sizeof(SArbitratorVgroupInfo));
+    for (int j = 0; j < vgNum; j++) {
+      SArbitratorVgroupInfo *pVgInfo = taosArrayGet(pArbVgroups->vgroups, j);
+      if (tDecodeI32(&decoder, &pVgInfo->vgId) < 0) return -1;
+      if (tDecodeI8(&decoder, &pVgInfo->replica) < 0) return -1;
+      for (int32_t k = 0; k < TSDB_MAX_REPLICA; ++k) {
+        SReplica *pReplica = &pVgInfo->replicas[k];
+        if (tDecodeSReplica(&decoder, pReplica) < 0) return -1;
+      }
+    }
+  }
+  tEndDecode(&decoder);
 
-  // tEndDecode(&decoder);
-
-  // tDecoderClear(&decoder);
+  tDecoderClear(&decoder);
   return 0;
 }
 
@@ -5793,7 +5802,11 @@ void tFreeSMGetArbitratorsRsp(SMGetArbitratorsRsp *pRsp) {
     return;
   }
 
-  // TODO(LSG): release array
+  size_t arbVgNum = taosArrayGetSize(pRsp->arbVgroups);
+  for (size_t i = 0; i < arbVgNum; i++) {
+    SArbitratorVgroups* pArbVg = taosArrayGet(pRsp->arbVgroups, i);
+    taosArrayDestroy(pArbVg->vgroups);
+  }
   taosArrayDestroy(pRsp->arbVgroups);
 }
 

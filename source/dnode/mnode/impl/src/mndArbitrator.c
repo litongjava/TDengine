@@ -510,9 +510,9 @@ static int32_t mndProcessGetArbitratorsReq(SRpcMsg *pReq) {
         memcpy(pReplica->fqdn, pVgidDnode->fqdn, TSDB_FQDN_LEN);
         mndReleaseDnode(pMnode, pVgidDnode);
       }
-
       mndReleaseVgroup(pMnode, pVgObj);
     }
+    taosArrayPush(getRsp.arbVgroups, &arbVgroup);
   }
 
   int32_t contLen = tSerializeSMGetArbitratorsRsp(NULL, 0, &getRsp);

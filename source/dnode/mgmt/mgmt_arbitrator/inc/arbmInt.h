@@ -82,7 +82,7 @@ void            arbmReleaseArbitrator(SArbitratorMgmt *pMgmt, SArbitratorObj *pA
 SArray *arbmGetMsgHandles();
 int32_t arbmProcessCreateReq(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg);
 int32_t arbmProcessDropReq(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg);
-int32_t arbmProcessGetAribtratorVgIdsRsp(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg);
+void    arbmSendGetArbitratorsReq(SArbitratorMgmt *pMgmt);
 
 // arbmFile.c
 int32_t arbmGetArbitratorListFromFile(SArbitratorMgmt *pMgmt, SArbWrapperCfg **ppCfgs, int32_t *numOfArbitrators);
