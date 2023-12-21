@@ -16,10 +16,10 @@
 #define _DEFAULT_SOURCE
 #include "mndVgroup.h"
 #include "audit.h"
+#include "mndArbitrator.h"
 #include "mndDb.h"
 #include "mndDnode.h"
 #include "mndMnode.h"
-#include "mndArbitrator.h"
 #include "mndPrivilege.h"
 #include "mndShow.h"
 #include "mndStb.h"
@@ -330,9 +330,9 @@ void *mndBuildCreateVnodeReq(SMnode *pMnode, SDnodeObj *pDnode, SDbObj *pDb, SVg
   }
 
   SArbitratorEp *pArbEp = &createReq.arbitrator;
-  pArbEp->arbitratorId = pVgroup->arbitratorId;
-  if (pVgroup->arbitratorId != -1) {
-    SArbObj *pVgArbitrator = mndAcquireArbitrator(pMnode, pVgroup->arbitratorId);
+  pArbEp->arbId = pVgroup->arbId;
+  if (pVgroup->arbId != -1) {
+    SArbObj *pVgArbitrator = mndAcquireArbitrator(pMnode, pVgroup->arbId);
     if (pVgArbitrator == NULL) {
       return NULL;
     }
@@ -361,9 +361,9 @@ void *mndBuildCreateVnodeReq(SMnode *pMnode, SDnodeObj *pDnode, SDbObj *pDb, SVg
     mInfo("vgId:%d, replica:%d ep:%s:%u", createReq.vgId, i, createReq.learnerReplicas[i].fqdn,
           createReq.learnerReplicas[i].port);
   }
-  if (createReq.arbitrator.arbitratorId != -1) {
-    mInfo("vgId:%d, arbitratorId:%d ep:%s:%u", createReq.vgId, createReq.arbitrator.arbitratorId,
-          createReq.arbitrator.fqdn, createReq.arbitrator.port);
+  if (createReq.arbitrator.arbId != -1) {
+    mInfo("vgId:%d, arbId:%d ep:%s:%u", createReq.vgId, createReq.arbitrator.arbId, createReq.arbitrator.fqdn,
+          createReq.arbitrator.port);
   }
 
   int32_t contLen = tSerializeSCreateVnodeReq(NULL, 0, &createReq);
@@ -732,16 +732,14 @@ static int32_t mndCompareDnodeVnodes(SDnodeObj *pDnode1, SDnodeObj *pDnode2) {
   return d1Score > d2Score ? 1 : -1;
 }
 
-static int32_t mndGetArbitratorScore(SArbObj *pArbitrator) {
-  return pArbitrator->numOfVgroups;
-}
+static int32_t mndGetArbitratorScore(SArbObj *pArbitrator) { return pArbitrator->numOfVgroups; }
 
 static bool mndBuildArbitratorsArrayFp(SMnode *pMnode, void *pObj, void *p1, void *p2, void *p3) {
   SArbObj *pArbitrator = pObj;
-  SArray         *pArray = p1;
-  int32_t         exceptArbitratorId = *(int32_t *)p2;
+  SArray  *pArray = p1;
+  int32_t  exceptarbId = *(int32_t *)p2;
 
-  if (exceptArbitratorId == pArbitrator->id) {
+  if (exceptarbId == pArbitrator->id) {
     return true;
   }
 
@@ -756,7 +754,7 @@ static bool mndBuildArbitratorsArrayFp(SMnode *pMnode, void *pObj, void *p1, voi
   return true;
 }
 
-SArray *mndBuildArbitratorsArray(SMnode *pMnode, int32_t exceptArbitratorId) {
+SArray *mndBuildArbitratorsArray(SMnode *pMnode, int32_t exceptarbId) {
   SSdb   *pSdb = pMnode->pSdb;
   int32_t numOfArbitrators = mndGetArbitratorSize(pMnode);
 
@@ -766,8 +764,8 @@ SArray *mndBuildArbitratorsArray(SMnode *pMnode, int32_t exceptArbitratorId) {
     return NULL;
   }
 
-  //sdbTraverse(pSdb, SDB_ARBITRATOR, mndResetArbitratorsArrayFp, NULL, NULL, NULL);
-  sdbTraverse(pSdb, SDB_ARBITRATOR, mndBuildArbitratorsArrayFp, pArray, &exceptArbitratorId, NULL);
+  // sdbTraverse(pSdb, SDB_ARBITRATOR, mndResetArbitratorsArrayFp, NULL, NULL, NULL);
+  sdbTraverse(pSdb, SDB_ARBITRATOR, mndBuildArbitratorsArrayFp, pArray, &exceptarbId, NULL);
 
   mDebug("build %d arbitrators array", (int32_t)taosArrayGetSize(pArray));
   for (int32_t i = 0; i < (int32_t)taosArrayGetSize(pArray); ++i) {
@@ -868,8 +866,8 @@ static int32_t mndGetAvailableArbitrator(SVgObj *pVgroup, SArray *pArray) {
     terrno = TSDB_CODE_ARB_NO_ENOUGH_NODE;
     return -1;
   }
-  pVgroup->arbitratorId = pArbitrator->id;
-  mInfo("db:%s, vgId:%d, is alloced, arbitrator:%d", pVgroup->dbName, pVgroup->vgId, pVgroup->arbitratorId);
+  pVgroup->arbId = pArbitrator->id;
+  mInfo("db:%s, vgId:%d, is alloced, arbitrator:%d", pVgroup->dbName, pVgroup->vgId, pVgroup->arbId);
   pArbitrator->numOfVgroups++;
   pArbitrator->pDnode->numOfArbitrators++;
 
@@ -947,7 +945,7 @@ int32_t mndAllocVgroup(SMnode *pMnode, SDbObj *pDb, SVgObj **ppVgroups) {
       goto _OVER;
     }
 
-    pVgroup->arbitratorId = -1;
+    pVgroup->arbId = -1;
     if (pDb->cfg.withArbitrator) {
       if (mndGetAvailableArbitrator(pVgroup, pArbitratorArray) != 0) {
         goto _OVER;

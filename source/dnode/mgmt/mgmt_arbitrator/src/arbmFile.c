@@ -66,12 +66,12 @@ static int32_t arbmDecodeArbitratorList(SJson *pJson, SArbitratorMgmt *pMgmt, SA
     if (arbitrator == NULL) goto _OVER;
 
     SArbWrapperCfg *pCfg = &pCfgs[i];
-    tjsonGetInt32ValueFromDouble(arbitrator, "arbitratorId", pCfg->arbitratorId, code);
+    tjsonGetInt32ValueFromDouble(arbitrator, "arbId", pCfg->arbId, code);
     if (code < 0) goto _OVER;
     tjsonGetInt32ValueFromDouble(arbitrator, "dropped", pCfg->dropped, code);
     if (code < 0) goto _OVER;
 
-    snprintf(pCfg->path, sizeof(pCfg->path), "%s%sarbitrator%d", pMgmt->path, TD_DIRSEP, pCfg->arbitratorId);
+    snprintf(pCfg->path, sizeof(pCfg->path), "%s%sarbitrator%d", pMgmt->path, TD_DIRSEP, pCfg->arbId);
   }
 
   code = 0;
@@ -161,7 +161,7 @@ static int32_t arbmEncodeArbitratorList(SJson *pJson, SArbitratorObj **ppArbObjs
 
     SJson *arbitrator = tjsonCreateObject();
     if (arbitrator == NULL) return -1;
-    if (tjsonAddDoubleToObject(arbitrator, "arbitratorId", pArbObj->arbitratorId) < 0) return -1;
+    if (tjsonAddDoubleToObject(arbitrator, "arbId", pArbObj->arbId) < 0) return -1;
     if (tjsonAddDoubleToObject(arbitrator, "dropped", pArbObj->dropped) < 0) return -1;
     if (tjsonAddItemToArray(arbitrators, arbitrator) < 0) return -1;
   }

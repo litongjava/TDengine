@@ -46,13 +46,13 @@ typedef struct {
 } SArbitratorMgmt;
 
 typedef struct {
-  int32_t arbitratorId;
+  int32_t arbId;
   int8_t  dropped;
   char    path[PATH_MAX + 20];
 } SArbWrapperCfg;
 
 typedef struct {
-  int32_t       arbitratorId;
+  int32_t       arbId;
   int32_t       refCount;
   int8_t        dropped;
   int8_t        failed;
@@ -74,8 +74,8 @@ typedef struct {
 // arbmInt.c
 int32_t         arbmOpenArbitrator(SArbitratorMgmt *pMgmt, SArbWrapperCfg *pCfg, SArbitrator *pImpl);
 void            arbmCloseArbitrator(SArbitratorMgmt *pMgmt, SArbitratorObj *pArbitrator);
-SArbitratorObj *arbmAcquireArbitrator(SArbitratorMgmt *pMgmt, int32_t arbitratorId);
-SArbitratorObj *arbmAcquireArbitratorImpl(SArbitratorMgmt *pMgmt, int32_t arbitratorId, bool strict);
+SArbitratorObj *arbmAcquireArbitrator(SArbitratorMgmt *pMgmt, int32_t arbId);
+SArbitratorObj *arbmAcquireArbitratorImpl(SArbitratorMgmt *pMgmt, int32_t arbId, bool strict);
 void            arbmReleaseArbitrator(SArbitratorMgmt *pMgmt, SArbitratorObj *pArbitrator);
 
 // arbmHandle.c
@@ -92,6 +92,8 @@ SArbitratorObj **arbmGetArbitratorListFromHash(SArbitratorMgmt *pMgmt, int32_t *
 // arbmWorker.c
 int32_t arbmPutRpcMsgToQueue(SArbitratorMgmt *pMgmt, EQueueType qtype, SRpcMsg *pRpc);
 int32_t arbmGetQueueSize(SArbitratorMgmt *pMgmt, int32_t vgId, EQueueType qtype);
+
+int32_t arbmPutRpcMsgToArbObjQueue(SArbitratorObj *pObj, SRpcMsg *pRpc);
 
 int32_t arbmStartWorker(SArbitratorMgmt *pMgmt);
 void    arbmStopWorker(SArbitratorMgmt *pMgmt);

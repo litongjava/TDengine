@@ -25,30 +25,30 @@ int32_t arbmProcessCreateReq(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg) {
     return -1;
   }
 
-  int32_t arbId = createReq.arbitratorId;
+  int32_t arbId = createReq.arbId;
 
   char path[TSDB_FILENAME_LEN] = {0};
   snprintf(path, TSDB_FILENAME_LEN, "%s%sarbitrator%d", pMgmt->path, TD_DIRSEP, arbId);
 
   if (arbitratorCreate(path, arbId) != 0) {
-    dError("arbitratorId:%d, failed to create arbitrator since %s", arbId, terrstr());
+    dError("arbId:%d, failed to create arbitrator since %s", arbId, terrstr());
     code = terrno;
     return code;
   }
 
   SArbitrator *pImpl = arbitratorOpen(path, pMgmt->msgCb);
   if (pImpl == NULL) {
-    dError("arbitratorId:%d, failed to open arbitrator since %s", arbId, terrstr());
+    dError("arbId:%d, failed to open arbitrator since %s", arbId, terrstr());
     code = terrno;
     goto _OVER;
   }
 
-  wrapperCfg.arbitratorId = arbId;
+  wrapperCfg.arbId = arbId;
   wrapperCfg.dropped = 0;
   snprintf(wrapperCfg.path, sizeof(wrapperCfg.path), "%s%sarbtrator%d", pMgmt->path, TD_DIRSEP, arbId);
   code = arbmOpenArbitrator(pMgmt, &wrapperCfg, pImpl);
   if (code != 0) {
-    dError("arbitratorId:%d, failed to open vnode since %s", arbId, terrstr());
+    dError("arbId:%d, failed to open vnode since %s", arbId, terrstr());
     code = terrno;
     goto _OVER;
   }
@@ -64,8 +64,8 @@ _OVER:
     arbitratorClose(pImpl);
     arbitratorDestroy(path);
   } else {
-    dInfo("arbitratorId:%d, arbitrator management handle msgType:%s, end to create arbitrator, arbitrator is created",
-          arbId, TMSG_INFO(pMsg->msgType));
+    dInfo("arbId:%d, arbitrator management handle msgType:%s, end to create arbitrator, arbitrator is created", arbId,
+          TMSG_INFO(pMsg->msgType));
   }
 
   terrno = code;
@@ -79,18 +79,18 @@ int32_t arbmProcessDropReq(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg) {
     return -1;
   }
 
-  int32_t arbitratorId = dropReq.arbitratorId;
-  dInfo("arbitratorId:%d, start to drop arbitrator", arbitratorId);
+  int32_t arbId = dropReq.arbId;
+  dInfo("arbId:%d, start to drop arbitrator", arbId);
 
   if (dropReq.dnodeId != pMgmt->pData->dnodeId) {
     terrno = TSDB_CODE_INVALID_MSG;
-    dError("arbitratorId:%d, dnodeId:%d not matched with local dnode", dropReq.arbitratorId, dropReq.dnodeId);
+    dError("arbId:%d, dnodeId:%d not matched with local dnode", dropReq.arbId, dropReq.dnodeId);
     return -1;
   }
 
-  SArbitratorObj *pArbObj = arbmAcquireArbitratorImpl(pMgmt, arbitratorId, false);
+  SArbitratorObj *pArbObj = arbmAcquireArbitratorImpl(pMgmt, arbId, false);
   if (pArbObj == NULL) {
-    dInfo("arbitratorId:%d, failed to drop since %s", arbitratorId, terrstr());
+    dInfo("arbId:%d, failed to drop since %s", arbId, terrstr());
     terrno = TSDB_CODE_ARB_NOT_EXIST;
     return -1;
   }
@@ -105,7 +105,7 @@ int32_t arbmProcessDropReq(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg) {
   arbmCloseArbitrator(pMgmt, pArbObj);
   arbmWriteArbitratorListToFile(pMgmt);
 
-  dInfo("arbitratorId:%d, is dropped", arbitratorId);
+  dInfo("arbId:%d, is dropped", arbId);
   return 0;
 }
 
@@ -117,11 +117,40 @@ static void arbmProcessGetAribtratorVgIdsRsp(SArbitratorMgmt *pMgmt, SRpcMsg *pR
   }
 
   if (getRsp.dnodeId != pMgmt->pData->dnodeId) {
-
+    dError("failed to process get-arbitrators rsp, dnodeId not match %d:%d", pMgmt->pData->dnodeId, getRsp.dnodeId);
+    goto _OVER;
   }
 
+  size_t arbVgNum = taosArrayGetSize(getRsp.arbVgroups);
+  for (int32_t i = 0; i < arbVgNum; i++) {
+    SArbitratorVgroups *pArbVg = taosArrayGet(getRsp.arbVgroups, i);
+    SArbitratorObj     *pArbObj = arbmAcquireArbitrator(pMgmt, pArbVg->arbId);
+    if (pArbObj == NULL) {
+      dInfo("failed to process get-arbitrators rsp, arbitrator:%d not exist", pArbVg->arbId);
+      goto _OVER;
+    }
 
- _OVER:
+    int32_t contLen = tSerializeSArbSetVgroupsReq(NULL, 0, pArbVg);
+    void   *pHead = rpcMallocCont(contLen);
+    if (pRsp == NULL) {
+      terrno = TSDB_CODE_OUT_OF_MEMORY;
+      goto _OVER;
+    }
+
+    tSerializeSArbSetVgroupsReq(pHead, contLen, pArbVg);
+
+    SRpcMsg rpcMsg = {.pCont = pHead,
+                      .contLen = contLen,
+                      .msgType = TDMT_ARB_SET_VGROUPS,
+                      .info.ahandle = (void *)0x9527,
+                      .info.refId = 0,
+                      .info.noResp = 1};
+
+    arbmPutRpcMsgToArbObjQueue(pArbObj, &rpcMsg);
+    arbmReleaseArbitrator(pMgmt, pArbObj);
+  }
+
+_OVER:
   tFreeSMGetArbitratorsRsp(&getRsp);
   rpcFreeCont(pRsp->pCont);
 }

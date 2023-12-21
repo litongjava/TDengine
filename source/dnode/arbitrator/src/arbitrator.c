@@ -15,20 +15,42 @@
 
 #include "arbInt.h"
 
-int32_t arbitratorProcessGetAribtratorVgIdsRsp(SArbitrator *pArb, SRpcMsg *pMsg) { return -1; }
+static int32_t arbitratorProcessSetVgroupsReq(SArbitrator *pArb, SRpcMsg *pMsg) {
+  SArbSetVgroupsReq setReq = {0};
+  if (tDeserializeSArbSetVgroupsReq(pMsg->pCont, pMsg->contLen, &setReq) != 0) {
+    terrno = TSDB_CODE_INVALID_MSG;
+    return -1;
+  }
+
+  if (setReq.arbId != pArb->arbId) {
+    terrno = TSDB_CODE_INVALID_MSG;
+    arbError("arbId not matched local:%d, msg:%d", pArb->arbId, setReq.arbId);
+    return -1;
+  }
+
+  //TODO(LSG): write file
+
+  arbInfo("arbId:%d, save config while process set vgroups", info.arbId);
+  if (arbitratorSaveInfo(pArb->path, &info) < 0 || arbitratorCommitInfo(pArb->path) < 0) {
+    arbError("arbId:%d, failed to save arbitrator config since %s", pArb->arbId, tstrerror(terrno));
+    return -1;
+  }
+
+  return 0;
+}
 
 void arbitratorProcessQueue(SQueueInfo *pInfo, SRpcMsg *pMsg) {
   SArbitrator *pArb = pInfo->ahandle;
   int32_t          code = -1;
 
-  arbTrace("msg:%p, get from arbitrator-mgmt queue", pMsg);
+  arbTrace("msg:%p, get from arb-mgmt queue", pMsg);
   switch (pMsg->msgType) {
-    case TDMT_MND_GET_ARBITRATORS_RSP:
-      code = arbitratorProcessGetAribtratorVgIdsRsp(pArb, pMsg);
+    case TDMT_ARB_SET_VGROUPS:
+      code = arbitratorProcessSetVgroupsReq(pArb, pMsg);
       break;
     default:
       terrno = TSDB_CODE_MSG_NOT_PROCESSED;
-      arbError("msg:%p, not processed in arbitrator-mgmt queue", pMsg);
+      arbError("msg:%p, not processed in arb-mgmt queue", pMsg);
   }
 
   if (IsReq(pMsg)) {

@@ -5688,7 +5688,7 @@ int32_t tSerializeSDCreateArbitratorReq(void *buf, int32_t bufLen, SDCreateArbit
 
   if (tStartEncode(&encoder) < 0) return -1;
   if (tEncodeI32(&encoder, pReq->dnodeId) < 0) return -1;
-  if (tEncodeI32(&encoder, pReq->arbitratorId) < 0) return -1;
+  if (tEncodeI32(&encoder, pReq->arbId) < 0) return -1;
   tEndEncode(&encoder);
 
   int32_t tlen = encoder.pos;
@@ -5702,7 +5702,7 @@ int32_t tDeserializeSDCreateArbitratorReq(void *buf, int32_t bufLen, SDCreateArb
 
   if (tStartDecode(&decoder) < 0) return -1;
   if (tDecodeI32(&decoder, &pReq->dnodeId) < 0) return -1;
-  if (tDecodeI32(&decoder, &pReq->arbitratorId) < 0) return -1;
+  if (tDecodeI32(&decoder, &pReq->arbId) < 0) return -1;
   tEndDecode(&decoder);
 
   tDecoderClear(&decoder);
@@ -5776,21 +5776,77 @@ int32_t tDeserializeSMGetArbitratorsRsp(void *buf, int32_t bufLen, SMGetArbitrat
   if (tDecodeI32(&decoder, &arbNum) < 0) return -1;
   pRsp->arbVgroups = taosArrayInit(arbNum, sizeof(SArbitratorVgroups));
   for (int i = 0; i < arbNum; i++) {
-    SArbitratorVgroups *pArbVgroups = taosArrayGet(pRsp->arbVgroups, i);
-    if (tDecodeI32(&decoder, &pArbVgroups->arbId) < 0) return -1;
+    SArbitratorVgroups arbVgroup = {0};
+    if (tDecodeI32(&decoder, &arbVgroup.arbId) < 0) return -1;
     int32_t vgNum = 0;
     if (tDecodeI32(&decoder, &vgNum) < 0) return -1;
-    pArbVgroups->vgroups = taosArrayInit(vgNum, sizeof(SArbitratorVgroupInfo));
+    arbVgroup.vgroups = taosArrayInit(vgNum, sizeof(SArbitratorVgroupInfo));
     for (int j = 0; j < vgNum; j++) {
-      SArbitratorVgroupInfo *pVgInfo = taosArrayGet(pArbVgroups->vgroups, j);
-      if (tDecodeI32(&decoder, &pVgInfo->vgId) < 0) return -1;
-      if (tDecodeI8(&decoder, &pVgInfo->replica) < 0) return -1;
+      SArbitratorVgroupInfo vgInfo = {0};
+      if (tDecodeI32(&decoder, &vgInfo.vgId) < 0) return -1;
+      if (tDecodeI8(&decoder, &vgInfo.replica) < 0) return -1;
       for (int32_t k = 0; k < TSDB_MAX_REPLICA; ++k) {
-        SReplica *pReplica = &pVgInfo->replicas[k];
+        SReplica *pReplica = &vgInfo.replicas[k];
         if (tDecodeSReplica(&decoder, pReplica) < 0) return -1;
       }
+      taosArrayPush(arbVgroup.vgroups, &vgInfo);
+    }
+    taosArrayPush(pRsp->arbVgroups, &arbVgroup);
+  }
+  tEndDecode(&decoder);
+
+  tDecoderClear(&decoder);
+  return 0;
+}
+
+int32_t tSerializeSArbSetVgroupsReq(void *buf, int32_t bufLen, SArbSetVgroupsReq *pReq) {
+  SEncoder encoder = {0};
+  tEncoderInit(&encoder, buf, bufLen);
+
+  if (tStartEncode(&encoder) < 0) return -1;
+
+  SArbitratorVgroups *pArbVgroups = pReq;
+  if (tEncodeI32(&encoder, pArbVgroups->arbId) < 0) return -1;
+  int32_t vgNum = taosArrayGetSize(pArbVgroups->vgroups);
+  if (tEncodeI32(&encoder, vgNum) < 0) return -1;
+  for (int j = 0; j < vgNum; j++) {
+    SArbitratorVgroupInfo *pVgInfo = taosArrayGet(pArbVgroups->vgroups, j);
+    if (tEncodeI32(&encoder, pVgInfo->vgId) < 0) return -1;
+    if (tEncodeI8(&encoder, pVgInfo->replica) < 0) return -1;
+    for (int32_t k = 0; k < TSDB_MAX_REPLICA; ++k) {
+      SReplica *pReplica = &pVgInfo->replicas[k];
+      if (tEncodeSReplica(&encoder, pReplica) < 0) return -1;
     }
   }
+
+  tEndEncode(&encoder);
+
+  int32_t tlen = encoder.pos;
+  tEncoderClear(&encoder);
+  return tlen;
+}
+
+int32_t tDeserializeSArbSetVgroupsReq(void *buf, int32_t bufLen, SArbSetVgroupsReq *pReq) {
+  SDecoder decoder = {0};
+  tDecoderInit(&decoder, buf, bufLen);
+
+  if (tStartDecode(&decoder) < 0) return -1;
+
+  if (tDecodeI32(&decoder, &pReq->arbId) < 0) return -1;
+  int32_t vgNum = 0;
+  if (tDecodeI32(&decoder, &vgNum) < 0) return -1;
+  pReq->vgroups = taosArrayInit(vgNum, sizeof(SArbitratorVgroupInfo));
+  for (int j = 0; j < vgNum; j++) {
+    SArbitratorVgroupInfo vgInfo = {0};
+    if (tDecodeI32(&decoder, &vgInfo.vgId) < 0) return -1;
+    if (tDecodeI8(&decoder, &vgInfo.replica) < 0) return -1;
+    for (int32_t k = 0; k < TSDB_MAX_REPLICA; ++k) {
+      SReplica *pReplica = &vgInfo.replicas[k];
+      if (tDecodeSReplica(&decoder, pReplica) < 0) return -1;
+    }
+    taosArrayPush(pReq->vgroups, &vgInfo);
+  }
+
   tEndDecode(&decoder);
 
   tDecoderClear(&decoder);

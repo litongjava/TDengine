@@ -15,6 +15,8 @@
 
 #define _DEFAULT_SOURCE
 #include "mndDb.h"
+#include "audit.h"
+#include "mndArbitrator.h"
 #include "mndCluster.h"
 #include "mndDnode.h"
 #include "mndIndex.h"
@@ -28,12 +30,10 @@
 #include "mndTrans.h"
 #include "mndUser.h"
 #include "mndVgroup.h"
-#include "mndArbitrator.h"
 #include "mndView.h"
 #include "systable.h"
-#include "tjson.h"
 #include "thttp.h"
-#include "audit.h"
+#include "tjson.h"
 
 #define DB_VER_NUMBER   1
 #define DB_RESERVE_SIZE 41
@@ -44,14 +44,14 @@ static int32_t  mndDbActionDelete(SSdb *pSdb, SDbObj *pDb);
 static int32_t  mndDbActionUpdate(SSdb *pSdb, SDbObj *pOld, SDbObj *pNew);
 static int32_t  mndNewDbActionValidate(SMnode *pMnode, STrans *pTrans, void *pObj);
 
-static int32_t  mndProcessCreateDbReq(SRpcMsg *pReq);
-static int32_t  mndProcessAlterDbReq(SRpcMsg *pReq);
-static int32_t  mndProcessDropDbReq(SRpcMsg *pReq);
-static int32_t  mndProcessUseDbReq(SRpcMsg *pReq);
-static int32_t  mndProcessTrimDbReq(SRpcMsg *pReq);
-static int32_t  mndRetrieveDbs(SRpcMsg *pReq, SShowObj *pShow, SSDataBlock *pBlock, int32_t rowsCapacity);
-static void     mndCancelGetNextDb(SMnode *pMnode, void *pIter);
-static int32_t  mndProcessGetDbCfgReq(SRpcMsg *pReq);
+static int32_t mndProcessCreateDbReq(SRpcMsg *pReq);
+static int32_t mndProcessAlterDbReq(SRpcMsg *pReq);
+static int32_t mndProcessDropDbReq(SRpcMsg *pReq);
+static int32_t mndProcessUseDbReq(SRpcMsg *pReq);
+static int32_t mndProcessTrimDbReq(SRpcMsg *pReq);
+static int32_t mndRetrieveDbs(SRpcMsg *pReq, SShowObj *pShow, SSDataBlock *pBlock, int32_t rowsCapacity);
+static void    mndCancelGetNextDb(SMnode *pMnode, void *pIter);
+static int32_t mndProcessGetDbCfgReq(SRpcMsg *pReq);
 
 #ifndef TD_ENTERPRISE
 int32_t mndProcessCompactDbReq(SRpcMsg *pReq) { return TSDB_CODE_OPS_NOT_SUPPORT; }
@@ -685,7 +685,7 @@ static int32_t mndCreateDb(SMnode *pMnode, SRpcMsg *pReq, SCreateDbReq *pCreate,
   SArbObj *pArbObj = NULL;
   if (dbObj.cfg.withArbitrator) {
     for (int i = 0; i < dbObj.cfg.numOfVgroups; i++) {
-      pArbObj = mndAcquireArbitrator(pMnode, pVgroups[i].arbitratorId);
+      pArbObj = mndAcquireArbitrator(pMnode, pVgroups[i].arbId);
       pArbObj->updateTime = taosGetTimestampMs();
       pArbObj->numOfVgroups++;
       if (taosArrayPush(pArbObj->vgIds, &pVgroups[i].vgId) == NULL) goto _OVER;
@@ -709,17 +709,17 @@ _OVER:
   return code;
 }
 
-static void mndBuildAuditDetailInt32(char* detail, char* tmp, char* format, int32_t para){
-  if(para > 0){
-    if(strlen(detail) > 0) strcat(detail, ", ");
+static void mndBuildAuditDetailInt32(char *detail, char *tmp, char *format, int32_t para) {
+  if (para > 0) {
+    if (strlen(detail) > 0) strcat(detail, ", ");
     sprintf(tmp, format, para);
     strcat(detail, tmp);
   }
 }
 
-static void mndBuildAuditDetailInt64(char* detail, char* tmp, char* format, int64_t para){
-  if(para > 0){
-    if(strlen(detail) > 0) strcat(detail, ", ");
+static void mndBuildAuditDetailInt64(char *detail, char *tmp, char *format, int64_t para) {
+  if (para > 0) {
+    if (strlen(detail) > 0) strcat(detail, ", ");
     sprintf(tmp, format, para);
     strcat(detail, tmp);
   }
@@ -1574,21 +1574,19 @@ int32_t mndValidateDbInfo(SMnode *pMnode, SDbCacheInfo *pDbs, int32_t numOfDbs, 
 
     int32_t numOfTable = mndGetDBTableNum(pDb, pMnode);
 
-    if (pDbCacheInfo->vgVersion >= pDb->vgVersion &&
-        pDbCacheInfo->cfgVersion >= pDb->cfgVersion &&
-        numOfTable == pDbCacheInfo->numOfTable &&
-        pDbCacheInfo->stateTs == pDb->stateTs) {
+    if (pDbCacheInfo->vgVersion >= pDb->vgVersion && pDbCacheInfo->cfgVersion >= pDb->cfgVersion &&
+        numOfTable == pDbCacheInfo->numOfTable && pDbCacheInfo->stateTs == pDb->stateTs) {
       mTrace("db:%s, valid dbinfo, vgVersion:%d cfgVersion:%d stateTs:%" PRId64
              " numOfTables:%d, not changed vgVersion:%d cfgVersion:%d stateTs:%" PRId64 " numOfTables:%d",
-             pDbCacheInfo->dbFName, pDbCacheInfo->vgVersion, pDbCacheInfo->cfgVersion, pDbCacheInfo->stateTs, pDbCacheInfo->numOfTable,
-             pDb->vgVersion, pDb->cfgVersion, pDb->stateTs, numOfTable);
+             pDbCacheInfo->dbFName, pDbCacheInfo->vgVersion, pDbCacheInfo->cfgVersion, pDbCacheInfo->stateTs,
+             pDbCacheInfo->numOfTable, pDb->vgVersion, pDb->cfgVersion, pDb->stateTs, numOfTable);
       mndReleaseDb(pMnode, pDb);
       continue;
     } else {
       mInfo("db:%s, valid dbinfo, vgVersion:%d cfgVersion:%d stateTs:%" PRId64
             " numOfTables:%d, changed to vgVersion:%d cfgVersion:%d stateTs:%" PRId64 " numOfTables:%d",
-            pDbCacheInfo->dbFName, pDbCacheInfo->vgVersion, pDbCacheInfo->cfgVersion, pDbCacheInfo->stateTs, pDbCacheInfo->numOfTable,
-            pDb->vgVersion, pDb->cfgVersion, pDb->stateTs, numOfTable);
+            pDbCacheInfo->dbFName, pDbCacheInfo->vgVersion, pDbCacheInfo->cfgVersion, pDbCacheInfo->stateTs,
+            pDbCacheInfo->numOfTable, pDb->vgVersion, pDb->cfgVersion, pDb->stateTs, numOfTable);
     }
 
     if (pDbCacheInfo->cfgVersion < pDb->cfgVersion) {
@@ -1596,8 +1594,7 @@ int32_t mndValidateDbInfo(SMnode *pMnode, SDbCacheInfo *pDbs, int32_t numOfDbs, 
       mndDumpDbCfgInfo(rsp.cfgRsp, pDb);
     }
 
-    if (pDbCacheInfo->vgVersion < pDb->vgVersion ||
-        numOfTable != pDbCacheInfo->numOfTable ||
+    if (pDbCacheInfo->vgVersion < pDb->vgVersion || numOfTable != pDbCacheInfo->numOfTable ||
         pDbCacheInfo->stateTs != pDb->stateTs) {
       rsp.useDbRsp = taosMemoryCalloc(1, sizeof(SUseDbRsp));
       rsp.useDbRsp->pVgroupInfos = taosArrayInit(pDb->cfg.numOfVgroups, sizeof(SVgroupInfo));

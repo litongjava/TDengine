@@ -39,7 +39,7 @@ typedef struct SArbitrator SArbitrator;
 SArbitrator *arbitratorOpen(const char *path, SMsgCb msgCb);
 void         arbitratorClose(SArbitrator *pArbitrator);
 
-int32_t arbitratorCreate(const char *path, int32_t arbitratorId);
+int32_t arbitratorCreate(const char *path, int32_t arbId);
 void    arbitratorDestroy(const char *path);
 
 void arbitratorProcessQueue(SQueueInfo *pInfo, SRpcMsg *pMsg);

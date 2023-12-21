@@ -15,13 +15,13 @@
 
 #define _DEFAULT_SOURCE
 #include "mndArbitrator.h"
+#include "audit.h"
 #include "mndDnode.h"
-#include "mndVgroup.h"
 #include "mndPrivilege.h"
 #include "mndShow.h"
 #include "mndTrans.h"
 #include "mndUser.h"
-#include "audit.h"
+#include "mndVgroup.h"
 
 #define ARBITRATOR_VER_NUMBER   1
 #define ARBITRATOR_RESERVE_SIZE 64
@@ -62,8 +62,8 @@ int32_t mndInitArbitrator(SMnode *pMnode) {
 
 void mndCleanupArbitrator(SMnode *pMnode) {}
 
-SArbObj *mndAcquireArbitrator(SMnode *pMnode, int32_t arbitratorId) {
-  SArbObj *pObj = sdbAcquire(pMnode->pSdb, SDB_ARBITRATOR, &arbitratorId);
+SArbObj *mndAcquireArbitrator(SMnode *pMnode, int32_t arbId) {
+  SArbObj *pObj = sdbAcquire(pMnode->pSdb, SDB_ARBITRATOR, &arbId);
   if (pObj == NULL && terrno == TSDB_CODE_SDB_OBJ_NOT_THERE) {
     terrno = TSDB_CODE_MND_ARBITRATOR_NOT_EXIST;
   }
@@ -88,7 +88,7 @@ static SSdbRaw *mndArbitratorActionEncode(SArbObj *pObj) {
   SDB_SET_INT64(pRaw, dataPos, pObj->updateTime, _OVER)
   SDB_SET_INT32(pRaw, dataPos, pObj->numOfVgroups, _OVER)
   for (int i = 0; i < pObj->numOfVgroups; i++) {
-    int32_t* vgId = taosArrayGet(pObj->vgIds, i);
+    int32_t *vgId = taosArrayGet(pObj->vgIds, i);
     SDB_SET_INT32(pRaw, dataPos, *vgId, _OVER)
   }
   SDB_SET_RESERVE(pRaw, dataPos, ARBITRATOR_RESERVE_SIZE, _OVER)
@@ -209,7 +209,7 @@ int32_t mndSetCreateArbitratorCommitLogs(STrans *pTrans, SArbObj *pObj) {
 int32_t mndSetCreateArbitratorRedoActions(STrans *pTrans, SDnodeObj *pDnode, SArbObj *pObj) {
   SDCreateArbitratorReq createReq = {0};
   createReq.dnodeId = pDnode->id;
-  createReq.arbitratorId = pObj->id;
+  createReq.arbId = pObj->id;
 
   int32_t contLen = tSerializeSDCreateArbitratorReq(NULL, 0, &createReq);
   void   *pReq = taosMemoryMalloc(contLen);
@@ -237,7 +237,7 @@ int32_t mndSetCreateArbitratorRedoActions(STrans *pTrans, SDnodeObj *pDnode, SAr
 static int32_t mndSetCreateArbitratorUndoActions(STrans *pTrans, SDnodeObj *pDnode, SArbObj *pObj) {
   SDDropArbitratorReq dropReq = {0};
   dropReq.dnodeId = pDnode->id;
-  dropReq.arbitratorId = pObj->id;
+  dropReq.arbId = pObj->id;
 
   int32_t contLen = tSerializeSDCreateArbitratorReq(NULL, 0, &dropReq);
   void   *pReq = taosMemoryMalloc(contLen);
@@ -358,7 +358,7 @@ static int32_t mndSetDropArbitratorCommitLogs(STrans *pTrans, SArbObj *pObj) {
 static int32_t mndSetDropArbitratorRedoActions(STrans *pTrans, SDnodeObj *pDnode, SArbObj *pObj) {
   SDDropArbitratorReq dropReq = {0};
   dropReq.dnodeId = pDnode->id;
-  dropReq.arbitratorId = pObj->id;
+  dropReq.arbId = pObj->id;
 
   int32_t contLen = tSerializeSDCreateArbitratorReq(NULL, 0, &dropReq);
   void   *pReq = taosMemoryMalloc(contLen);
@@ -455,9 +455,9 @@ _OVER:
 }
 
 static int32_t mndProcessGetArbitratorsReq(SRpcMsg *pReq) {
-  SMnode                   *pMnode = pReq->info.node;
-  int32_t                   code = -1;
-  SArbObj                  *pObj = NULL;
+  SMnode             *pMnode = pReq->info.node;
+  int32_t             code = -1;
+  SArbObj            *pObj = NULL;
   SMGetArbitratorsReq getReq = {0};
   SMGetArbitratorsRsp getRsp = {0};
 
@@ -492,8 +492,8 @@ static int32_t mndProcessGetArbitratorsReq(SRpcMsg *pReq) {
 
     int32_t vgNum = taosArrayGetSize(pArb->vgIds);
     for (int32_t i = 0; i < vgNum; i++) {
-      int32_t* vgId = taosArrayGet(pArb->vgIds, i);
-      SVgObj *pVgObj = mndAcquireVgroup(pMnode, *vgId);
+      int32_t *vgId = taosArrayGet(pArb->vgIds, i);
+      SVgObj  *pVgObj = mndAcquireVgroup(pMnode, *vgId);
 
       SArbitratorVgroupInfo vgInfo = {0};
       vgInfo.vgId = *vgId;
@@ -503,13 +503,14 @@ static int32_t mndProcessGetArbitratorsReq(SRpcMsg *pReq) {
 
         SVnodeGid *pVgid = &pVgObj->vnodeGid[j];
         SDnodeObj *pVgidDnode = mndAcquireDnode(pMnode, pVgid->dnodeId);
-        if (pVgidDnode == NULL) return -1; // TODO(LSG): RELEASE
+        if (pVgidDnode == NULL) return -1;  // TODO(LSG): RELEASE
 
         pReplica->id = pVgidDnode->id;
         pReplica->port = pVgidDnode->port;
         memcpy(pReplica->fqdn, pVgidDnode->fqdn, TSDB_FQDN_LEN);
         mndReleaseDnode(pMnode, pVgidDnode);
       }
+      taosArrayPush(arbVgroup.vgroups, &vgInfo);
       mndReleaseVgroup(pMnode, pVgObj);
     }
     taosArrayPush(getRsp.arbVgroups, &arbVgroup);
@@ -568,7 +569,7 @@ static int32_t mndRetrieveArbitrators(SRpcMsg *pReq, SShowObj *pShow, SSDataBloc
     char vgroupIds[128 + VARSTR_HEADER_SIZE] = {0};
     int  size = 0;
     for (int i = 0; i < pObj->numOfVgroups; i++) {
-      int32_t* vgId = taosArrayGet(pObj->vgIds, i);
+      int32_t *vgId = taosArrayGet(pObj->vgIds, i);
       size += sprintf(vgroupIds + VARSTR_HEADER_SIZE + size, "%d,", *vgId);
     }
     varDataSetLen(vgroupIds, size);

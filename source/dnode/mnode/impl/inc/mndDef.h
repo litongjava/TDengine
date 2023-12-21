@@ -406,7 +406,7 @@ typedef struct {
   void*          pTsma;
   int32_t        numOfCachedTables;
   int32_t        syncConfChangeVer;
-  int32_t        arbitratorId;
+  int32_t        arbId;
 } SVgObj;
 
 typedef struct {

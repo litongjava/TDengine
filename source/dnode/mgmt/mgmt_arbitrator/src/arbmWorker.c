@@ -31,7 +31,7 @@ static void arbmProcessQueue(SQueueInfo *pInfo, SRpcMsg *pMsg) {
   int32_t          code = -1;
   const STraceId  *trace = &pMsg->info.traceId;
 
-  dGTrace("msg:%p, get from arbitrator-mgmt queue", pMsg);
+  dGTrace("msg:%p, get from arb-mgmt queue", pMsg);
   switch (pMsg->msgType) {
     case TDMT_DND_CREATE_ARBITRATOR:
       code = arbmProcessCreateReq(pMgmt, pMsg);
@@ -41,38 +41,7 @@ static void arbmProcessQueue(SQueueInfo *pInfo, SRpcMsg *pMsg) {
       break;
     default:
       terrno = TSDB_CODE_MSG_NOT_PROCESSED;
-      dGError("msg:%p, not processed in arbitrator-mgmt queue", pMsg);
-  }
-
-  if (IsReq(pMsg)) {
-    if (code != 0) {
-      if (terrno != 0) code = terrno;
-      dGError("msg:%p, failed to process since %s, type:%s", pMsg, tstrerror(code), TMSG_INFO(pMsg->msgType));
-    }
-    arbmSendRsp(pMsg, code);
-  }
-
-  dGTrace("msg:%p, is freed, code:0x%x", pMsg, code);
-  rpcFreeCont(pMsg->pCont);
-  taosFreeQitem(pMsg);
-}
-
-static void arbmProcessQueueByArbId(SQueueInfo *pInfo, SRpcMsg *pMsg) {
-  SArbitratorMgmt *pMgmt = pInfo->ahandle;
-  int32_t          code = -1;
-  const STraceId  *trace = &pMsg->info.traceId;
-
-  dGTrace("msg:%p, get from arbitrator-mgmt queue", pMsg);
-  switch (pMsg->msgType) {
-    case TDMT_DND_CREATE_ARBITRATOR:
-      code = arbmProcessCreateReq(pMgmt, pMsg);
-      break;
-    case TDMT_DND_DROP_ARBITRATOR:
-      code = arbmProcessDropReq(pMgmt, pMsg);
-      break;
-    default:
-      terrno = TSDB_CODE_MSG_NOT_PROCESSED;
-      dGError("msg:%p, not processed in arbitrator-mgmt queue", pMsg);
+      dGError("msg:%p, not processed in arb-mgmt queue", pMsg);
   }
 
   if (IsReq(pMsg)) {
@@ -94,10 +63,6 @@ static int32_t arbmPutNodeMsgToWorker(SSingleWorker *pWorker, SRpcMsg *pMsg) {
   return 0;
 }
 
-int32_t arbmPutNodeMsgToArbQueue(SArbitratorObj *pArbObj, SRpcMsg *pMsg) {
-  return arbmPutNodeMsgToWorker(&pArbObj->worker, pMsg);
-}
-
 int32_t arbmPutNodeMsgToQueue(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg) {
   return arbmPutNodeMsgToWorker(&pMgmt->mgmtWorker, pMsg);
 }
@@ -108,13 +73,24 @@ int32_t arbmPutRpcMsgToQueue(SArbitratorMgmt *pMgmt, EQueueType qtype, SRpcMsg *
   memcpy(pMsg, pRpc, sizeof(SRpcMsg));
   pRpc->pCont = NULL;
 
-  dTrace("msg:%p, is created and will put into arbitrator-fetch queue, len:%d", pMsg, pRpc->contLen);
+  dTrace("msg:%p, is created and will put into arb-mgmt queue, len:%d", pMsg, pRpc->contLen);
   taosWriteQitem(pMgmt->mgmtWorker.queue, pMsg);
   return 0;
 }
 
 int32_t arbmGetQueueSize(SArbitratorMgmt *pMgmt, int32_t vgId, EQueueType qtype) {
   return taosQueueItemSize(pMgmt->mgmtWorker.queue);
+}
+
+int32_t arbmPutRpcMsgToArbObjQueue(SArbitratorObj *pObj, SRpcMsg *pRpc) {
+  SRpcMsg *pMsg = taosAllocateQitem(sizeof(SRpcMsg), DEF_QITEM, pRpc->contLen);
+  if (pMsg == NULL) return -1;
+  memcpy(pMsg, pRpc, sizeof(SRpcMsg));
+  pRpc->pCont = NULL;
+
+  dTrace("msg:%p, is created and will put into arb-worker:%d queue, len:%d", pMsg, pObj->arbId, pRpc->contLen);
+  taosWriteQitem(pObj->worker.queue, pMsg);
+  return 0;
 }
 
 int32_t arbObjStartWorker(SArbitratorObj *pArbObj) {
@@ -127,14 +103,14 @@ int32_t arbObjStartWorker(SArbitratorObj *pArbObj) {
     return -1;
   }
 
-  dInfo("arbitratorId:%d, write-queue:%p is alloced, thread:%08" PRId64, pArbObj->arbitratorId,
-        pArbObj->worker.queue, pArbObj->worker.queue->threadId);
+  dInfo("arbId:%d, write-queue:%p is alloced, thread:%08" PRId64, pArbObj->arbId, pArbObj->worker.queue,
+        pArbObj->worker.queue->threadId);
   return 0;
 }
 
 void arbObjStopWorker(SArbitratorObj *pArbObj) {
   tSingleWorkerCleanup(&pArbObj->worker);
-  dDebug("arbitratorId:%d, queue is freed", pArbObj->arbitratorId);
+  dDebug("arbId:%d, queue is freed", pArbObj->arbId);
 }
 
 int32_t arbmStartWorker(SArbitratorMgmt *pMgmt) {
@@ -147,15 +123,15 @@ int32_t arbmStartWorker(SArbitratorMgmt *pMgmt) {
   };
 
   if (tSingleWorkerInit(&pMgmt->mgmtWorker, &workerCfg) != 0) {
-    dError("failed to start arbitrator worker since %s", terrstr());
+    dError("failed to start arb-mgmt worker since %s", terrstr());
     return -1;
   }
 
-  dDebug("arbitrator worker is initialized");
+  dDebug("arb-mgmt worker is initialized");
   return 0;
 }
 
 void arbmStopWorker(SArbitratorMgmt *pMgmt) {
   tSingleWorkerCleanup(&pMgmt->mgmtWorker);
-  dDebug("arbitrator worker is closed");
+  dDebug("arb-mgmt worker is closed");
 }

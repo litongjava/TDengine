@@ -27,7 +27,7 @@ static int arbitratorEncodeInfo(const SArbitratorInfo *pInfo, char **ppData) {
     return -1;
   }
 
-  if (tjsonAddIntegerToObject(pJson, "arbitratorId", pInfo->arbitratorId) < 0) return -1;
+  if (tjsonAddIntegerToObject(pJson, "arbId", pInfo->arbId) < 0) return -1;
   // TODO(LSG): VGROUPS
 
   pData = tjsonToString(pJson);
@@ -54,7 +54,7 @@ static int arbitratorDecodeInfo(uint8_t *pData, SArbitratorInfo *pInfo) {
   }
 
   int32_t code;
-  tjsonGetNumberValue(pJson, "arbitratorId", pInfo->arbitratorId, code);
+  tjsonGetNumberValue(pJson, "arbId", pInfo->arbId, code);
   if (code < 0) {
     goto _err;
   }
@@ -160,7 +160,7 @@ static int32_t arbitratorSaveInfo(const char *dir, SArbitratorInfo *pInfo) {
   // free info binary
   taosMemoryFree(data);
 
-  arbInfo("arbitratorId:%d, arbitrator info is saved, fname:%s", pInfo->arbitratorId, fname);
+  arbInfo("arbId:%d, arbitrator info is saved, fname:%s", pInfo->arbId, fname);
 
   return 0;
 
@@ -186,33 +186,32 @@ static int32_t arbitratorCommitInfo(const char *dir) {
   return 0;
 }
 
-int32_t arbitratorCreate(const char *path, int32_t arbitratorId) {
+int32_t arbitratorCreate(const char *path, int32_t arbId) {
   SArbitratorInfo info = {0};
   char            dir[TSDB_FILENAME_LEN] = {0};
 
   // create arbitrator env
   if (taosMkDir(path)) {
-    arbError("arbitratorId:%d, failed to prepare arbitrator dir since %s, path: %s", arbitratorId, strerror(errno),
-             path);
+    arbError("arbId:%d, failed to prepare arbitrator dir since %s, path: %s", arbId, strerror(errno), path);
     return TAOS_SYSTEM_ERROR(errno);
   }
 
-  info.arbitratorId = arbitratorId;
+  info.arbId = arbId;
 
   SArbitratorInfo oldInfo = {0};
-  oldInfo.arbitratorId = -1;
+  oldInfo.arbId = -1;
   if (arbitratorLoadInfo(path, &oldInfo) == 0) {
-    arbWarn("vgId:%d, arbitrator config info already exists at %s.", oldInfo.arbitratorId, path);
-    return (oldInfo.arbitratorId == info.arbitratorId) ? 0 : -1;
+    arbWarn("vgId:%d, arbitrator config info already exists at %s.", oldInfo.arbId, path);
+    return (oldInfo.arbId == info.arbId) ? 0 : -1;
   }
 
-  arbInfo("arbitratorId:%d, save config while create", info.arbitratorId);
+  arbInfo("arbId:%d, save config while create", info.arbId);
   if (arbitratorSaveInfo(path, &info) < 0 || arbitratorCommitInfo(path) < 0) {
-    arbError("arbitratorId:%d, failed to save arbitrator config since %s", arbitratorId, tstrerror(terrno));
+    arbError("arbId:%d, failed to save arbitrator config since %s", arbId, tstrerror(terrno));
     return -1;
   }
 
-  arbInfo("arbitratorId:%d, arbitrator is created", info.arbitratorId);
+  arbInfo("arbId:%d, arbitrator is created", info.arbId);
   return 0;
 }
 
@@ -228,7 +227,7 @@ SArbitrator *arbitratorOpen(const char *path, SMsgCb msgCb) {
   int32_t         ret = 0;
   terrno = TSDB_CODE_SUCCESS;
 
-  info.arbitratorId = -1;
+  info.arbId = -1;
 
   // load arbitrator info
   ret = arbitratorLoadInfo(path, &info);
@@ -242,12 +241,12 @@ SArbitrator *arbitratorOpen(const char *path, SMsgCb msgCb) {
   pArbitrator = taosMemoryCalloc(1, sizeof(*pArbitrator) + strlen(path) + 1);
   if (pArbitrator == NULL) {
     terrno = TSDB_CODE_OUT_OF_MEMORY;
-    arbError("arbitratorId:%d, failed to open arbitrator since %s", info.arbitratorId, tstrerror(terrno));
+    arbError("arbId:%d, failed to open arbitrator since %s", info.arbId, tstrerror(terrno));
     return NULL;
   }
 
   strcpy(pArbitrator->path, path);
-  pArbitrator->arbitratorId = info.arbitratorId;
+  pArbitrator->arbId = info.arbId;
   pArbitrator->msgCb = msgCb;
 
   return pArbitrator;

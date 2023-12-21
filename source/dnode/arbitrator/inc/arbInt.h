@@ -36,11 +36,11 @@ typedef struct SArbitratorInfo SArbitratorInfo;
 #define ARB_INFO_FNAME_TMP "arbitrator_tmp.json"
 
 struct SArbitratorInfo {
-  int32_t arbitratorId;
+  int32_t arbId;
 };
 
 struct SArbitrator {
-  int32_t arbitratorId;
+  int32_t arbId;
   SMsgCb  msgCb;
   char    path[];
 };
