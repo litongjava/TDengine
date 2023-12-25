@@ -16,6 +16,8 @@
 #include "arbInt.h"
 #include "arbitrator.h"
 
+static void arbitratorGenerateArbToken(int32_t arbId, char *buf);
+
 static int arbitratorEncodeInfo(const SArbitratorInfo *pInfo, char **ppData) {
   SJson *pJson;
   char  *pData;
@@ -27,8 +29,34 @@ static int arbitratorEncodeInfo(const SArbitratorInfo *pInfo, char **ppData) {
     return -1;
   }
 
-  if (tjsonAddIntegerToObject(pJson, "arbId", pInfo->arbId) < 0) return -1;
-  // TODO(LSG): VGROUPS
+  if (tjsonAddIntegerToObject(pJson, "arbId", pInfo->arbId) < 0) goto _err;
+
+  SJson *vgroups = tjsonCreateArray();
+  if (vgroups == NULL) goto _err;
+  if (tjsonAddItemToObject(pJson, "vgroups", vgroups) < 0) goto _err;
+
+  int32_t vgNum = taosArrayGetSize(pInfo->vgroups);
+  for (int i = 0; i < vgNum; i++) {
+    SJson *info = tjsonCreateObject();
+    if (info == NULL) goto _err;
+    if (tjsonAddItemToArray(vgroups, info) < 0) goto _err;
+    SArbitratorVgroupInfo *pVgInfo = taosArrayGet(pInfo->vgroups, i);
+    if (tjsonAddIntegerToObject(info, "vgId", pVgInfo->vgId) < 0) goto _err;
+    if (tjsonAddIntegerToObject(info, "replica", pVgInfo->replica) < 0) goto _err;
+
+    SJson *replicas = tjsonCreateArray();
+    if (replicas == NULL) goto _err;
+    if (tjsonAddItemToObject(info, "replicas", replicas) < 0) goto _err;
+    for (int j = 0; j < pVgInfo->replica; j++) {
+      SJson *replica = tjsonCreateObject();
+      if (info == NULL) goto _err;
+      if (tjsonAddItemToArray(replicas, replica) < 0) goto _err;
+      SReplica *pReplica = &pVgInfo->replicas[j];
+      if (tjsonAddIntegerToObject(replica, "id", pReplica->id) < 0) goto _err;
+      if (tjsonAddIntegerToObject(replica, "port", pReplica->port) < 0) goto _err;
+      if (tjsonAddStringToObject(replica, "fqdn", pReplica->fqdn) < 0) goto _err;
+    }
+  }
 
   pData = tjsonToString(pJson);
   if (pData == NULL) {
@@ -53,12 +81,28 @@ static int arbitratorDecodeInfo(uint8_t *pData, SArbitratorInfo *pInfo) {
     return -1;
   }
 
-  int32_t code;
-  tjsonGetNumberValue(pJson, "arbId", pInfo->arbId, code);
-  if (code < 0) {
-    goto _err;
+  if (tjsonGetIntValue(pJson, "arbId", &pInfo->arbId) < 0) goto _err;
+
+  SJson *vgroups = tjsonGetObjectItem(pJson, "vgroups");
+  int    vgNum = tjsonGetArraySize(vgroups);
+  pInfo->vgroups = taosArrayInit(vgNum, sizeof(SArbitratorVgroupInfo));
+  for (int i = 0; i < vgNum; i++) {
+    SJson *info = tjsonGetArrayItem(vgroups, i);
+    if (info == NULL) goto _err;
+    SArbitratorVgroupInfo vgInfo = {0};
+    if (tjsonGetIntValue(info, "vgId", &vgInfo.vgId) < 0) goto _err;
+    if (tjsonGetTinyIntValue(info, "replica", &vgInfo.replica) < 0) goto _err;
+    SJson *replicas = tjsonGetObjectItem(info, "replicas");
+    for (int j = 0; j < vgInfo.replica; j++) {
+      SJson *replica = tjsonGetArrayItem(replicas, j);
+      if (info == NULL) goto _err;
+      SReplica *pReplica = &vgInfo.replicas[j];
+      if (tjsonGetIntValue(replica, "id", &pReplica->id) < 0) goto _err;
+      if (tjsonGetSmallIntValue(replica, "port", &pReplica->port) < 0) goto _err;
+      if (tjsonGetStringValue(replica, "fqdn", pReplica->fqdn) < 0) goto _err;
+    }
+    taosArrayPush(pInfo->vgroups, &vgInfo);
   }
-  // TODO(LSG): VGROUPS
 
   tjsonDelete(pJson);
 
@@ -186,6 +230,14 @@ static int32_t arbitratorCommitInfo(const char *dir) {
   return 0;
 }
 
+int32_t arbitratorUpdateInfo(const char *dir, SArbitratorInfo *pInfo) {
+  if (arbitratorSaveInfo(dir, pInfo) < 0 || arbitratorCommitInfo(dir) < 0) {
+    arbError("arbId:%d, failed to save arbitrator config since %s", pInfo->arbId, tstrerror(terrno));
+    return -1;
+  }
+  return 0;
+}
+
 int32_t arbitratorCreate(const char *path, int32_t arbId) {
   SArbitratorInfo info = {0};
   char            dir[TSDB_FILENAME_LEN] = {0};
@@ -206,8 +258,7 @@ int32_t arbitratorCreate(const char *path, int32_t arbId) {
   }
 
   arbInfo("arbId:%d, save config while create", info.arbId);
-  if (arbitratorSaveInfo(path, &info) < 0 || arbitratorCommitInfo(path) < 0) {
-    arbError("arbId:%d, failed to save arbitrator config since %s", arbId, tstrerror(terrno));
+  if (arbitratorUpdateInfo(path, &info) < 0) {
     return -1;
   }
 
@@ -245,9 +296,11 @@ SArbitrator *arbitratorOpen(const char *path, SMsgCb msgCb) {
     return NULL;
   }
 
-  strcpy(pArbitrator->path, path);
-  pArbitrator->arbId = info.arbId;
+  pArbitrator->arbInfo.arbId = info.arbId;
+  pArbitrator->arbInfo.vgroups = info.vgroups;
+  arbitratorGenerateArbToken(pArbitrator->arbInfo.arbId, pArbitrator->arbToken);
   pArbitrator->msgCb = msgCb;
+  strcpy(pArbitrator->path, path);
 
   return pArbitrator;
 
@@ -260,4 +313,10 @@ void arbitratorClose(SArbitrator *pArbitrator) {
   if (pArbitrator) {
     taosMemoryFree(pArbitrator);
   }
+}
+
+static void arbitratorGenerateArbToken(int32_t arbId, char *buf) {
+  int32_t randVal = taosSafeRand() % 1000;
+  int64_t currentMs = taosGetTimestampMs();
+  sprintf(buf, "a%d#%"PRId64"#%d" , arbId, currentMs, randVal);
 }

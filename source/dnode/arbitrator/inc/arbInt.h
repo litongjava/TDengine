@@ -37,13 +37,17 @@ typedef struct SArbitratorInfo SArbitratorInfo;
 
 struct SArbitratorInfo {
   int32_t arbId;
+  SArray *vgroups; // SArbitratorVgroupInfo
 };
 
 struct SArbitrator {
-  int32_t arbId;
-  SMsgCb  msgCb;
-  char    path[];
+  SArbitratorInfo arbInfo;
+  char            arbToken[TD_ARB_TOKEN_SIZE];
+  SMsgCb          msgCb;
+  char            path[];
 };
+
+int32_t arbitratorUpdateInfo(const char *dir, SArbitratorInfo *pInfo);
 
 #ifdef __cplusplus
 }

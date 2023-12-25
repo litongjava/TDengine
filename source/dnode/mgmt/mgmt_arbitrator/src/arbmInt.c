@@ -20,7 +20,6 @@
 static int32_t arbmRequire(const SMgmtInputOpt *pInput, bool *required) {
   *required = true;
   return 0;
-  // return dmReadFile(pInput->path, pInput->name, required);
 }
 
 SArbitratorObj *arbmAcquireArbitratorImpl(SArbitratorMgmt *pMgmt, int32_t arbId, bool strict) {
@@ -255,22 +254,6 @@ static int32_t arbmOpenArbitrators(SArbitratorMgmt *pMgmt) {
   return 0;
 }
 
-static void vmGetArbitrators(SArbitratorMgmt *pMgmt) {
-  SMGetArbitratorsReq getArbReq = {0};
-
-  int32_t contLen = tSerializeSMGetArbitratorsReq(NULL, 0, &getArbReq);
-  if (contLen <= 0) {
-    // TODO(LSG): ERR
-  }
-  void *pReq = rpcMallocCont(contLen);
-  if (pReq == NULL) {
-    // TODO(LSG): ERR
-  }
-
-  getArbReq.dnodeId = pMgmt->pData->dnodeId;
-  tSerializeSMGetArbitratorsReq(pReq, contLen, &getArbReq);
-}
-
 static void *arbmThreadFp(void *param) {
   SArbitratorMgmt *pMgmt = param;
   int64_t          lastTime = 0;
@@ -283,8 +266,11 @@ static void *arbmThreadFp(void *param) {
     if (lastTime % 10 != 0) continue;
 
     int64_t sec = lastTime / 10;
+    if (sec % (tsGetArbitratorsIntervalSec) == 0) {
+      arbmPullupGetArbitrators(pMgmt);
+    }
     if (sec % (ARBITRATOR_TIMEOUT_SEC / 2) == 0) {
-      arbmSendGetArbitratorsReq(pMgmt);
+      arbmPullupArbHeartbeat(pMgmt);
     }
   }
 

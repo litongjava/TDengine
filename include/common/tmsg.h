@@ -205,6 +205,8 @@ typedef enum _mgmt_table {
 #define TD_REQ_FROM_APP  0
 #define TD_REQ_FROM_TAOX 1
 
+#define TD_ARB_TOKEN_SIZE 128
+
 typedef enum ENodeType {
   // Syntax nodes are used in parser and planner module, and some are also used in executor module, such as COLUMN,
   // VALUE, OPERATOR, FUNCTION and so on.
@@ -2078,7 +2080,7 @@ int32_t tSerializeSDCreateArbitratorReq(void* buf, int32_t bufLen, SDCreateArbit
 int32_t tDeserializeSDCreateArbitratorReq(void* buf, int32_t bufLen, SDCreateArbitratorReq* pReq);
 
 typedef struct {
-  int32_t dnodeId;
+  int32_t dnodeId; // dnodeId of arb
 } SMGetArbitratorsReq;
 
 int32_t tSerializeSMGetArbitratorsReq(void* buf, int32_t bufLen, SMGetArbitratorsReq* pReq);
@@ -2106,6 +2108,36 @@ void    tFreeSMGetArbitratorsRsp(SMGetArbitratorsRsp* pRsp);
 
 int32_t tSerializeSArbSetVgroupsReq(void* buf, int32_t bufLen, SArbSetVgroupsReq* pReq);
 int32_t tDeserializeSArbSetVgroupsReq(void* buf, int32_t bufLen, SArbSetVgroupsReq* pReq);
+
+typedef struct {
+  int32_t reserved;
+} SArbTimerReq;
+
+int32_t tSerializeSArbTimerReq(void* buf, int32_t bufLen, SArbTimerReq* pReq);
+int32_t tDeserializeSArbTimerReq(void* buf, int32_t bufLen, SArbTimerReq* pReq);
+
+typedef struct {
+  int32_t dnodeId; // dnodeId of vnode
+  int32_t vgId;
+  int32_t arbId;
+  char    arbToken[TD_ARB_TOKEN_SIZE];
+  int32_t seqNo;
+} SVArbHeartBeatReq;
+
+int32_t tSerializeSVArbHeartBeatReq(void* buf, int32_t bufLen, SVArbHeartBeatReq* pReq);
+int32_t tDeserializeSVArbHeartBeatReq(void* buf, int32_t bufLen, SVArbHeartBeatReq* pReq);
+
+typedef struct {
+  int32_t dnodeId;
+  int32_t vgId;
+  int32_t arbId;
+  char    arbToken[TD_ARB_TOKEN_SIZE];
+  int32_t seqNo;
+  char    vnodeArbToken[TD_ARB_TOKEN_SIZE];
+} SVArbHeartBeatRsp;
+
+int32_t tSerializeSVArbHeartBeatRsp(void* buf, int32_t bufLen, SVArbHeartBeatRsp* pReq);
+int32_t tDeserializeSVArbHeartBeatRsp(void* buf, int32_t bufLen, SVArbHeartBeatRsp* pReq);
 
 typedef struct {
   char queryStrId[TSDB_QUERY_ID_LEN];

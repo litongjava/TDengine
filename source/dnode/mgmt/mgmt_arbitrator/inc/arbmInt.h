@@ -82,7 +82,13 @@ void            arbmReleaseArbitrator(SArbitratorMgmt *pMgmt, SArbitratorObj *pA
 SArray *arbmGetMsgHandles();
 int32_t arbmProcessCreateReq(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg);
 int32_t arbmProcessDropReq(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg);
-void    arbmSendGetArbitratorsReq(SArbitratorMgmt *pMgmt);
+int32_t arbmProcessArbHeartBeatRsp(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg);
+int32_t arbmProcessGetAribtratorsRsp(SArbitratorMgmt *pMgmt, SRpcMsg *pRsp);
+
+int32_t arbmProcessGetArbitratorsTimer(SArbitratorMgmt *pMgmt, SRpcMsg *pRsp);
+
+void arbmPullupGetArbitrators(SArbitratorMgmt *pMgmt);
+void arbmPullupArbHeartbeat(SArbitratorMgmt *pMgmt);
 
 // arbmFile.c
 int32_t arbmGetArbitratorListFromFile(SArbitratorMgmt *pMgmt, SArbWrapperCfg **ppCfgs, int32_t *numOfArbitrators);
@@ -92,8 +98,6 @@ SArbitratorObj **arbmGetArbitratorListFromHash(SArbitratorMgmt *pMgmt, int32_t *
 // arbmWorker.c
 int32_t arbmPutRpcMsgToQueue(SArbitratorMgmt *pMgmt, EQueueType qtype, SRpcMsg *pRpc);
 int32_t arbmGetQueueSize(SArbitratorMgmt *pMgmt, int32_t vgId, EQueueType qtype);
-
-int32_t arbmPutRpcMsgToArbObjQueue(SArbitratorObj *pObj, SRpcMsg *pRpc);
 
 int32_t arbmStartWorker(SArbitratorMgmt *pMgmt);
 void    arbmStopWorker(SArbitratorMgmt *pMgmt);

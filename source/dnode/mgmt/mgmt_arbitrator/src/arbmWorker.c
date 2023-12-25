@@ -39,6 +39,15 @@ static void arbmProcessQueue(SQueueInfo *pInfo, SRpcMsg *pMsg) {
     case TDMT_DND_DROP_ARBITRATOR:
       code = arbmProcessDropReq(pMgmt, pMsg);
       break;
+    case TDMT_VND_ARB_HEARTBEAT_RSP:
+      code = arbmProcessArbHeartBeatRsp(pMgmt, pMsg);
+      break;
+    case TDMT_MND_GET_ARBITRATORS_RSP:
+      code = arbmProcessGetAribtratorsRsp(pMgmt, pMsg);
+      break;
+    case TDMT_ARB_GET_ARBS_TIMER:
+      code = arbmProcessGetArbitratorsTimer(pMgmt, pMsg);
+      break;
     default:
       terrno = TSDB_CODE_MSG_NOT_PROCESSED;
       dGError("msg:%p, not processed in arb-mgmt queue", pMsg);
@@ -82,7 +91,7 @@ int32_t arbmGetQueueSize(SArbitratorMgmt *pMgmt, int32_t vgId, EQueueType qtype)
   return taosQueueItemSize(pMgmt->mgmtWorker.queue);
 }
 
-int32_t arbmPutRpcMsgToArbObjQueue(SArbitratorObj *pObj, SRpcMsg *pRpc) {
+int32_t arbmPutNodeMsgToArbQueue(SArbitratorObj *pObj, SRpcMsg *pRpc) {
   SRpcMsg *pMsg = taosAllocateQitem(sizeof(SRpcMsg), DEF_QITEM, pRpc->contLen);
   if (pMsg == NULL) return -1;
   memcpy(pMsg, pRpc, sizeof(SRpcMsg));

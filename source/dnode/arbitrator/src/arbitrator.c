@@ -22,31 +22,56 @@ static int32_t arbitratorProcessSetVgroupsReq(SArbitrator *pArb, SRpcMsg *pMsg) 
     return -1;
   }
 
-  if (setReq.arbId != pArb->arbId) {
+  if (setReq.arbId != pArb->arbInfo.arbId) {
     terrno = TSDB_CODE_INVALID_MSG;
-    arbError("arbId not matched local:%d, msg:%d", pArb->arbId, setReq.arbId);
+    arbError("arbId not matched local:%d, msg:%d", pArb->arbInfo.arbId, setReq.arbId);
     return -1;
   }
 
-  //TODO(LSG): write file
+  SArray *tmp = pArb->arbInfo.vgroups;
+  pArb->arbInfo.vgroups = setReq.vgroups;
+  setReq.vgroups = tmp;
 
-  arbInfo("arbId:%d, save config while process set vgroups", info.arbId);
-  if (arbitratorSaveInfo(pArb->path, &info) < 0 || arbitratorCommitInfo(pArb->path) < 0) {
-    arbError("arbId:%d, failed to save arbitrator config since %s", pArb->arbId, tstrerror(terrno));
+  arbInfo("arbId:%d, save config while process set vgroups", pArb->arbInfo.arbId);
+  if (arbitratorUpdateInfo(pArb->path, &pArb->arbInfo) < 0) {
     return -1;
   }
 
   return 0;
 }
 
+static int32_t arbitratorProcessArbHeartBeatTimer(SArbitrator *pArb, SRpcMsg *pMsg) {
+  // TODO(LSG): send msg to all vnodes;
+  return 0;
+  //   SVArbHeartBeatReq req = {.dnodeId = pMgmt->pData->dnodeId};
+  //   int32_t           contLen = tSerializeSVArbHeartBeatReq(NULL, 0, &req);
+  //   void             *pHead = rpcMallocCont(contLen);
+  //   tSerializeSVArbHeartBeatReq(pHead, contLen, &req);
+
+  //   SRpcMsg rpcMsg = {.pCont = pHead,
+  //                     .contLen = contLen,
+  //                     .msgType = TDMT_VND_ARB_HEARTBEAT,
+  //                     .info.ahandle = (void *)0x9527,
+  //                     .info.refId = 0,
+  //                     .info.noResp = 0};
+  //   SEpSet  epset = {0};
+
+  //   dmGetMnodeEpSet(pMgmt->pData, &epset);
+
+  //   return rpcSendRequest(pMgmt->msgCb.clientRpc, &epset, &rpcMsg, NULL);
+}
+
 void arbitratorProcessQueue(SQueueInfo *pInfo, SRpcMsg *pMsg) {
   SArbitrator *pArb = pInfo->ahandle;
-  int32_t          code = -1;
+  int32_t      code = -1;
 
   arbTrace("msg:%p, get from arb-mgmt queue", pMsg);
   switch (pMsg->msgType) {
     case TDMT_ARB_SET_VGROUPS:
       code = arbitratorProcessSetVgroupsReq(pArb, pMsg);
+      break;
+    case TDMT_ARB_HEARTBEAT_TIMER:
+      code = arbitratorProcessArbHeartBeatTimer(pArb, pMsg);
       break;
     default:
       terrno = TSDB_CODE_MSG_NOT_PROCESSED;
@@ -58,7 +83,7 @@ void arbitratorProcessQueue(SQueueInfo *pInfo, SRpcMsg *pMsg) {
       if (terrno != 0) code = terrno;
       arbError("msg:%p, failed to process since %s, type:%s", pMsg, tstrerror(code), TMSG_INFO(pMsg->msgType));
     }
-    //arbmSendRsp(pMsg, code);
+    // arbmSendRsp(pMsg, code);
   }
 
   arbTrace("msg:%p, is freed, code:0x%x", pMsg, code);

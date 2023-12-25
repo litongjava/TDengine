@@ -5866,6 +5866,37 @@ void tFreeSMGetArbitratorsRsp(SMGetArbitratorsRsp *pRsp) {
   taosArrayDestroy(pRsp->arbVgroups);
 }
 
+int32_t tSerializeSArbTimerReq(void *buf, int32_t bufLen, SArbTimerReq *pReq) {
+  SEncoder encoder = {0};
+  tEncoderInit(&encoder, buf, bufLen);
+
+  if (tStartEncode(&encoder) < 0) return -1;
+  if (tEncodeI32(&encoder, pReq->reserved) < 0) return -1;
+  tEndEncode(&encoder);
+
+  int32_t tlen = encoder.pos;
+  tEncoderClear(&encoder);
+  return tlen;
+}
+
+int32_t tDeserializeSArbTimerReq(void *buf, int32_t bufLen, SArbTimerReq *pReq) {
+  SDecoder decoder = {0};
+  tDecoderInit(&decoder, buf, bufLen);
+
+  if (tStartDecode(&decoder) < 0) return -1;
+  if (tDecodeI32(&decoder, &pReq->reserved) < 0) return -1;
+  tEndDecode(&decoder);
+
+  tDecoderClear(&decoder);
+  return 0;
+}
+
+int32_t tSerializeSVArbHeartBeatReq(void *buf, int32_t bufLen, SVArbHeartBeatReq *pReq) { return -1; }
+int32_t tDeserializeSVArbHeartBeatReq(void *buf, int32_t bufLen, SVArbHeartBeatReq *pReq) { return -1; }
+
+int32_t tSerializeSVArbHeartBeatRsp(void *buf, int32_t bufLen, SVArbHeartBeatRsp *pReq) { return -1; }
+int32_t tDeserializeSVArbHeartBeatRsp(void *buf, int32_t bufLen, SVArbHeartBeatRsp *pReq) { return -1; }
+
 int32_t tSerializeSAuthReq(void *buf, int32_t bufLen, SAuthReq *pReq) {
   SEncoder encoder = {0};
   tEncoderInit(&encoder, buf, bufLen);
