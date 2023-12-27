@@ -30,24 +30,29 @@
 extern "C" {
 #endif
 
-typedef struct SArbitratorInfo SArbitratorInfo;
-
 #define ARB_INFO_FNAME     "arbitrator.json"
 #define ARB_INFO_FNAME_TMP "arbitrator_tmp.json"
 
-struct SArbitratorInfo {
+typedef struct {
+  int32_t  hbSeq;
+  int32_t  lastHbSeq;
+} SArbHbSeqNum;
+
+typedef struct {
   int32_t arbId;
-  SArray *vgroups; // SArbitratorVgroupInfo
-};
+  SArray *vgroups;  // SArbitratorVgroupInfo
+} SArbitratorInfo;
 
 struct SArbitrator {
   SArbitratorInfo arbInfo;
+  SHashObj       *hbSeqMap; // key: ((int64_t)dnodeId << 32) + vgId, value: SArbHbSeqNum
   char            arbToken[TD_ARB_TOKEN_SIZE];
   SMsgCb          msgCb;
   char            path[];
 };
 
 int32_t arbitratorUpdateInfo(const char *dir, SArbitratorInfo *pInfo);
+int64_t arbitratorGenerateHbSeqKey(int32_t dnodeId, int32_t vgId);
 
 #ifdef __cplusplus
 }

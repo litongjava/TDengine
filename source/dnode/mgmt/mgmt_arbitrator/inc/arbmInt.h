@@ -86,6 +86,7 @@ int32_t arbmProcessArbHeartBeatRsp(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg);
 int32_t arbmProcessGetAribtratorsRsp(SArbitratorMgmt *pMgmt, SRpcMsg *pRsp);
 
 int32_t arbmProcessGetArbitratorsTimer(SArbitratorMgmt *pMgmt, SRpcMsg *pRsp);
+int32_t arbmProcessArbHeartBeatTimer(SArbitratorMgmt *pMgmt, SRpcMsg *pRsp);
 
 void arbmPullupGetArbitrators(SArbitratorMgmt *pMgmt);
 void arbmPullupArbHeartbeat(SArbitratorMgmt *pMgmt);

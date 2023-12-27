@@ -14,6 +14,7 @@
  */
 
 #include "arbInt.h"
+#include "tmisce.h"
 
 static int32_t arbitratorProcessSetVgroupsReq(SArbitrator *pArb, SRpcMsg *pMsg) {
   SArbSetVgroupsReq setReq = {0};
@@ -40,25 +41,71 @@ static int32_t arbitratorProcessSetVgroupsReq(SArbitrator *pArb, SRpcMsg *pMsg) 
   return 0;
 }
 
+typedef struct {
+  char     fqdn[TSDB_FQDN_LEN];
+  uint16_t port;
+  SArray  *array;
+} SArbHbDnodeInfo;
+
 static int32_t arbitratorProcessArbHeartBeatTimer(SArbitrator *pArb, SRpcMsg *pMsg) {
-  // TODO(LSG): send msg to all vnodes;
+  SHashObj *pHash = taosHashInit(64, taosGetDefaultHashFunction(TSDB_DATA_TYPE_INT), false, HASH_NO_LOCK);
+
+  // collect all vgId/hbSeq of Dnodes
+  SArray *pVgInfoArray = pArb->arbInfo.vgroups;
+  int32_t arraySize = taosArrayGetSize(pVgInfoArray);
+  for (int32_t i = 0; i < arraySize; i++) {
+    SArbitratorVgroupInfo *pVgInfo = taosArrayGet(pVgInfoArray, i);
+    for (int32_t j = 0; j < pVgInfo->replica; j++) {
+      SReplica *pReplica = &pVgInfo->replicas[j];
+      SArbHbDnodeInfo *pDnodeInfo = taosHashGet(pHash, &pReplica->id, sizeof(int32_t));
+      if (!pDnodeInfo) {
+        SArbHbDnodeInfo dnodeInfo = {0};
+        memcpy(dnodeInfo.fqdn, pReplica->fqdn, TSDB_FQDN_LEN);
+        dnodeInfo.port = pReplica->port;
+        dnodeInfo.array = taosArrayInit(16, sizeof(SVArbHeartBeatSeq));
+        taosHashPut(pHash, &pReplica->id, sizeof(int32_t), &dnodeInfo, sizeof(SArbHbDnodeInfo));
+        pDnodeInfo = taosHashGet(pHash, &pReplica->id, sizeof(int32_t));
+      }
+      SVArbHeartBeatSeq seq = {.vgId = pVgInfo->vgId};
+      int64_t           key = arbitratorGenerateHbSeqKey(pReplica->id, pVgInfo->vgId);
+      SArbHbSeqNum     *pHbSeqNum = taosHashGet(pArb->hbSeqMap, &key, sizeof(int64_t));
+      if (!pHbSeqNum) {
+        SArbHbSeqNum seqNum = {.hbSeq = 0, .lastHbSeq = -1};
+        taosHashPut(pArb->hbSeqMap, &key, sizeof(int64_t), &seqNum, sizeof(SArbHbSeqNum));
+        pHbSeqNum = taosHashGet(pArb->hbSeqMap, &key, sizeof(int64_t));
+      }
+
+      seq.seqNo = pHbSeqNum->hbSeq++; // update seq of dnode-vg
+      taosArrayPush(pDnodeInfo->array, &seq);
+    }
+  }
+
+  size_t keyLen = 0;
+  void   *pIter = taosHashIterate(pHash, NULL);
+  while (pIter) {
+    int32_t dnodeId = *(int32_t *)taosHashGetKey(pIter, &keyLen);
+    SArbHbDnodeInfo *pDnodeInfo = pIter;
+
+    SVArbHeartBeatReq req = {0};
+    req.arbId = pArb->arbInfo.arbId;
+    memcpy(req.arbToken, pArb->arbToken, TD_ARB_TOKEN_SIZE);
+    req.dnodeId = dnodeId;
+    req.arbSeqArray = pDnodeInfo->array;
+    int32_t contLen = tSerializeSVArbHeartBeatReq(NULL, 0, &req);
+    void   *pHead = rpcMallocCont(contLen);
+    tSerializeSVArbHeartBeatReq(pHead, contLen, &req);
+
+    SRpcMsg rpcMsg = {.pCont = pHead, .contLen = contLen, .msgType = TDMT_VND_ARB_HEARTBEAT};
+
+    SEpSet epset = {.inUse = 0, .numOfEps = 1};
+    addEpIntoEpSet(&epset, pDnodeInfo->fqdn, pDnodeInfo->port);
+    pArb->msgCb.sendReqFp(&epset, &rpcMsg);
+
+    pIter = taosHashIterate(pHash, pIter);
+  }
+
+  taosHashCleanup(pHash);
   return 0;
-  //   SVArbHeartBeatReq req = {.dnodeId = pMgmt->pData->dnodeId};
-  //   int32_t           contLen = tSerializeSVArbHeartBeatReq(NULL, 0, &req);
-  //   void             *pHead = rpcMallocCont(contLen);
-  //   tSerializeSVArbHeartBeatReq(pHead, contLen, &req);
-
-  //   SRpcMsg rpcMsg = {.pCont = pHead,
-  //                     .contLen = contLen,
-  //                     .msgType = TDMT_VND_ARB_HEARTBEAT,
-  //                     .info.ahandle = (void *)0x9527,
-  //                     .info.refId = 0,
-  //                     .info.noResp = 0};
-  //   SEpSet  epset = {0};
-
-  //   dmGetMnodeEpSet(pMgmt->pData, &epset);
-
-  //   return rpcSendRequest(pMgmt->msgCb.clientRpc, &epset, &rpcMsg, NULL);
 }
 
 void arbitratorProcessQueue(SQueueInfo *pInfo, SRpcMsg *pMsg) {

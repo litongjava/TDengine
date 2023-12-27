@@ -130,7 +130,7 @@ int32_t arbmProcessArbHeartBeatRsp(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg) {
     return -1;
   }
 
-  int32_t arbId = arbHbRsp.arbId;
+  int32_t         arbId = arbHbRsp.arbId;
   SArbitratorObj *pArbObj = arbmAcquireArbitratorImpl(pMgmt, arbId, false);
   if (pArbObj == NULL) {
     dInfo("arbId:%d, failed to process arb-hb since %s", arbId, terrstr());
@@ -198,7 +198,7 @@ void arbmPullupGetArbitrators(SArbitratorMgmt *pMgmt) {
   void   *pReq = arbmBuildTimerMsg(&contLen);
   if (pReq != NULL) {
     SRpcMsg rpcMsg = {.msgType = TDMT_ARB_GET_ARBS_TIMER, .pCont = pReq, .contLen = contLen};
-    arbmPutNodeMsgToQueue(pMgmt, &rpcMsg);
+    arbmPutRpcMsgToQueue(pMgmt, WRITE_QUEUE, &rpcMsg);
   }
 }
 
@@ -207,34 +207,37 @@ void arbmPullupArbHeartbeat(SArbitratorMgmt *pMgmt) {
   void   *pReq = arbmBuildTimerMsg(&contLen);
   if (pReq != NULL) {
     SRpcMsg rpcMsg = {.msgType = TDMT_ARB_HEARTBEAT_TIMER, .pCont = pReq, .contLen = contLen};
-
-    void *pIter = taosHashIterate(pMgmt->hash, NULL);
-    while (pIter != NULL) {
-      SArbitratorObj *pArbObj = (SArbitratorObj *)pIter;
-      arbmPutNodeMsgToArbQueue(pArbObj, &rpcMsg);
-      pIter = taosHashIterate(pMgmt->hash, pIter);
-    }
+    arbmPutRpcMsgToQueue(pMgmt, WRITE_QUEUE, &rpcMsg);
   }
 }
 
 /*--- timer process funcs ---*/
-int32_t arbmProcessGetArbitratorsTimer(SArbitratorMgmt *pMgmt, SRpcMsg *pRsp) {
+int32_t arbmProcessGetArbitratorsTimer(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg) {
   SMGetArbitratorsReq req = {.dnodeId = pMgmt->pData->dnodeId};
   int32_t             contLen = tSerializeSMGetArbitratorsReq(NULL, 0, &req);
   void               *pHead = rpcMallocCont(contLen);
   tSerializeSMGetArbitratorsReq(pHead, contLen, &req);
 
-  SRpcMsg rpcMsg = {.pCont = pHead,
-                    .contLen = contLen,
-                    .msgType = TDMT_MND_GET_ARBITRATORS,
-                    .info.ahandle = (void *)0x9527,
-                    .info.refId = 0,
-                    .info.noResp = 0};
+  SRpcMsg rpcMsg = {.pCont = pHead, .contLen = contLen, .msgType = TDMT_MND_GET_ARBITRATORS};
   SEpSet  epset = {0};
-
   dmGetMnodeEpSet(pMgmt->pData, &epset);
+  return tmsgSendReq(&epset, &rpcMsg);
+}
 
-  return rpcSendRequest(pMgmt->msgCb.clientRpc, &epset, &rpcMsg, NULL);
+int32_t arbmProcessArbHeartBeatTimer(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg) {
+  SMGetArbitratorsReq req = {.dnodeId = pMgmt->pData->dnodeId};
+  int32_t             contLen = tSerializeSMGetArbitratorsReq(NULL, 0, &req);
+  void               *pHead = rpcMallocCont(contLen);
+  tSerializeSMGetArbitratorsReq(pHead, contLen, &req);
+
+  SRpcMsg rpcMsg = {.pCont = pHead, .contLen = contLen, .msgType = TDMT_ARB_HEARTBEAT_TIMER};
+  void   *pIter = taosHashIterate(pMgmt->hash, NULL);
+  while (pIter != NULL) {
+    SArbitratorObj *pArbObj = *(SArbitratorObj **)pIter;
+    arbmPutNodeMsgToArbQueue(pArbObj, &rpcMsg);
+    pIter = taosHashIterate(pMgmt->hash, pIter);
+  }
+  return 0;
 }
 
 SArray *arbmGetMsgHandles() {

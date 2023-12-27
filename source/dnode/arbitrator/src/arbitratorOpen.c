@@ -16,7 +16,8 @@
 #include "arbInt.h"
 #include "arbitrator.h"
 
-static void arbitratorGenerateArbToken(int32_t arbId, char *buf);
+static void      arbitratorGenerateArbToken(int32_t arbId, char *buf);
+static SHashObj *arbitratorInitHbSeqMap(SArray *array);
 
 static int arbitratorEncodeInfo(const SArbitratorInfo *pInfo, char **ppData) {
   SJson *pJson;
@@ -238,6 +239,8 @@ int32_t arbitratorUpdateInfo(const char *dir, SArbitratorInfo *pInfo) {
   return 0;
 }
 
+int64_t arbitratorGenerateHbSeqKey(int32_t dnodeId, int32_t vgId) { return ((int64_t)dnodeId << 32) + vgId; }
+
 int32_t arbitratorCreate(const char *path, int32_t arbId) {
   SArbitratorInfo info = {0};
   char            dir[TSDB_FILENAME_LEN] = {0};
@@ -298,6 +301,7 @@ SArbitrator *arbitratorOpen(const char *path, SMsgCb msgCb) {
 
   pArbitrator->arbInfo.arbId = info.arbId;
   pArbitrator->arbInfo.vgroups = info.vgroups;
+  pArbitrator->hbSeqMap = arbitratorInitHbSeqMap(pArbitrator->arbInfo.vgroups);
   arbitratorGenerateArbToken(pArbitrator->arbInfo.arbId, pArbitrator->arbToken);
   pArbitrator->msgCb = msgCb;
   strcpy(pArbitrator->path, path);
@@ -311,6 +315,7 @@ _err:
 
 void arbitratorClose(SArbitrator *pArbitrator) {
   if (pArbitrator) {
+    taosHashCleanup(pArbitrator->hbSeqMap);
     taosMemoryFree(pArbitrator);
   }
 }
@@ -318,5 +323,20 @@ void arbitratorClose(SArbitrator *pArbitrator) {
 static void arbitratorGenerateArbToken(int32_t arbId, char *buf) {
   int32_t randVal = taosSafeRand() % 1000;
   int64_t currentMs = taosGetTimestampMs();
-  sprintf(buf, "a%d#%"PRId64"#%d" , arbId, currentMs, randVal);
+  sprintf(buf, "a%d#%" PRId64 "#%d", arbId, currentMs, randVal);
+}
+
+static SHashObj *arbitratorInitHbSeqMap(SArray *array) {
+  SHashObj    *hbSeqMap = taosHashInit(64, taosGetDefaultHashFunction(TSDB_DATA_TYPE_BIGINT), true, HASH_NO_LOCK);
+  SArbHbSeqNum hbSeqNumInit = {0};
+
+  int32_t arraySize = taosArrayGetSize(array);
+  for (int32_t i = 0; i < arraySize; i++) {
+    SArbitratorVgroupInfo *pVgInfo = taosArrayGet(array, i);
+    for (int32_t j = 0; j < pVgInfo->replica; j++) {
+      int64_t hbSeqKey = arbitratorGenerateHbSeqKey(pVgInfo->replicas[j].id, pVgInfo->vgId);
+      taosHashPut(hbSeqMap, &hbSeqKey, sizeof(int64_t), &hbSeqNumInit, sizeof(SArbHbSeqNum));
+    }
+  }
+  return hbSeqMap;
 }
