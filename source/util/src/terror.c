@@ -699,6 +699,7 @@ TAOS_DEFINE_ERROR(TSDB_CODE_ARB_NO_ENOUGH_NODE,             "Out of arbitrators"
 TAOS_DEFINE_ERROR(TSDB_CODE_ARB_INVALID_ARB_ID,             "Arbitrator is closed or removed")
 TAOS_DEFINE_ERROR(TSDB_CODE_ARB_INIT_FAILED,                "Arbitrator init failure")
 TAOS_DEFINE_ERROR(TSDB_CODE_ARB_NOT_EXIST,                  "Arbitrator not exist")
+TAOS_DEFINE_ERROR(TSDB_CODE_ARB_TOKEN_MISMATCH,             "Arbitrator token mismatch")
 
 // TDLite
 TAOS_DEFINE_ERROR(TSDB_CODE_TDLITE_IVLD_OPEN_FLAGS,         "Invalid TDLite open flags")

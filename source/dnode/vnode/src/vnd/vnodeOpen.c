@@ -18,8 +18,6 @@
 #include "tsdb.h"
 #include "vnd.h"
 
-static void vnodeGenerateArbToken(int32_t vgId, char *buf);
-
 int32_t vnodeGetPrimaryDir(const char *relPath, int32_t diskPrimary, STfs *pTfs, char *buf, size_t bufLen) {
   if (pTfs) {
     SDiskID diskId = {0};
@@ -394,7 +392,6 @@ SVnode *vnodeOpen(const char *path, int32_t diskPrimary, STfs *pTfs, SMsgCb msgC
   pVnode->pTfs = pTfs;
   pVnode->diskPrimary = diskPrimary;
   pVnode->msgCb = msgCb;
-  vnodeGenerateArbToken(pVnode->config.vgId, pVnode->arbToken);
 
   taosThreadMutexInit(&pVnode->lock, NULL);
   pVnode->blocked = false;
@@ -539,9 +536,3 @@ ESyncRole vnodeGetRole(SVnode *pVnode) { return syncGetRole(pVnode->sync); }
 void vnodeStop(SVnode *pVnode) {}
 
 int64_t vnodeGetSyncHandle(SVnode *pVnode) { return pVnode->sync; }
-
-static void vnodeGenerateArbToken(int32_t vgId, char *buf) {
-  int32_t randVal = taosSafeRand() % 1000;
-  int64_t currentMs = taosGetTimestampMs();
-  sprintf(buf, "v%d#%"PRId64"#%d" , vgId, currentMs, randVal);
-}

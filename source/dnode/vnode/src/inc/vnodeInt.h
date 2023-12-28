@@ -463,8 +463,6 @@ struct SVnode {
   int32_t       blockSec;
   int64_t       blockSeq;
   SQHandle*     pQuery;
-
-  char arbToken[TD_ARB_TOKEN_SIZE];
 };
 
 #define TD_VID(PVNODE) ((PVNODE)->config.vgId)

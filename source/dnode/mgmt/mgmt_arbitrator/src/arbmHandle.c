@@ -140,6 +140,7 @@ int32_t arbmProcessArbHeartBeatRsp(SArbitratorMgmt *pMgmt, SRpcMsg *pMsg) {
 
   arbmPutNodeMsgToArbQueue(pArbObj, pMsg);
   arbmReleaseArbitrator(pMgmt, pArbObj);
+  tFreeSVArbHeartBeatRsp(&arbHbRsp);
   return 0;
 }
 

@@ -770,6 +770,70 @@ int32_t vmProcessDropVnodeReq(SVnodeMgmt *pMgmt, SRpcMsg *pMsg) {
   return 0;
 }
 
+int32_t vmProcessArbHeartBeatReq(SVnodeMgmt *pMgmt, SRpcMsg *pMsg) {
+  SVArbHeartBeatReq arbHbReq = {0};
+  if (tDeserializeSVArbHeartBeatReq(pMsg->pCont, pMsg->contLen, &arbHbReq) != 0) {
+    terrno = TSDB_CODE_INVALID_MSG;
+    goto _OVER;
+  }
+
+  if (arbHbReq.dnodeId != pMgmt->pData->dnodeId) {
+    terrno = TSDB_CODE_INVALID_MSG;
+    dError("dnodeId:%d not matched with local dnode", arbHbReq.dnodeId);
+    goto _OVER;
+  }
+
+  size_t arraySize = taosArrayGetSize(arbHbReq.arbSeqArray);
+
+  SVArbHeartBeatRsp arbHbRsp = {0};
+  arbHbRsp.arbId = arbHbReq.arbId;
+  memcpy(arbHbRsp.arbToken, arbHbReq.arbToken,TD_ARB_TOKEN_SIZE );
+  arbHbRsp.dnodeId = pMgmt->pData->dnodeId;
+  arbHbRsp.arbSeqTokenArray = taosArrayInit(arraySize, sizeof(SVArbHeartBeatSeqToken));
+
+  for (size_t i = 0; i < arraySize; i++) {
+    SVArbHeartBeatSeqToken hbToken = {0};
+    SVArbHeartBeatSeq *pHbSeq = taosArrayGet(arbHbReq.arbSeqArray, i);
+    SVnodeObj *pVnode = vmAcquireVnodeImpl(pMgmt, pHbSeq->vgId, false);
+    if (pVnode == NULL) {
+      // handle
+      dInfo("vgId:%d, failed to drop since %s", pHbSeq->vgId, terrstr());
+      terrno = TSDB_CODE_VND_NOT_EXIST;
+      return -1;
+    }
+
+    hbToken.vgId =pHbSeq->vgId;
+    hbToken.seqNo = pHbSeq->seqNo;
+    memcpy(hbToken.arbToken, pVnode->arbToken, TD_ARB_TOKEN_SIZE);
+
+    taosArrayPush(arbHbRsp.arbSeqTokenArray, &hbToken);
+
+    vmReleaseVnode(pMgmt, pVnode);
+  }
+
+  SRpcMsg rspMsg = {.info = pMsg->info};
+  int32_t rspLen = tSerializeSVArbHeartBeatRsp(NULL, 0, &arbHbRsp);
+  if (rspLen < 0) {
+    terrno= TSDB_CODE_OUT_OF_MEMORY;
+    goto _OVER;
+  }
+
+  void *pRsp = rpcMallocCont(rspLen);
+  if (pRsp == NULL) {
+    terrno= TSDB_CODE_OUT_OF_MEMORY;
+    goto _OVER;
+  }
+
+  tSerializeSVArbHeartBeatRsp(pRsp, rspLen, &arbHbRsp);
+  pMsg->info.rsp = pRsp;
+  pMsg->info.rspLen = rspLen;
+
+_OVER:
+  tFreeSVArbHeartBeatRsp(&arbHbRsp);
+  tFreeSVArbHeartBeatReq(&arbHbReq);
+  return terrno == TSDB_CODE_SUCCESS ? 0: -1;
+}
+
 SArray *vmGetMsgHandles() {
   int32_t code = -1;
   SArray *pArray = taosArrayInit(32, sizeof(SMgmtHandle));
@@ -870,6 +934,8 @@ SArray *vmGetMsgHandles() {
   if (dmSetMgmtHandle(pArray, TDMT_SYNC_HEARTBEAT_REPLY, vmPutMsgToSyncRdQueue, 0) == NULL) goto _OVER;
   if (dmSetMgmtHandle(pArray, TDMT_SYNC_SNAPSHOT_RSP, vmPutMsgToSyncRdQueue, 0) == NULL) goto _OVER;
   if (dmSetMgmtHandle(pArray, TDMT_SYNC_PREP_SNAPSHOT_REPLY, vmPutMsgToSyncRdQueue, 0) == NULL) goto _OVER;
+
+  if (dmSetMgmtHandle(pArray, TDMT_VND_ARB_HEARTBEAT, vmPutMsgToMgmtQueue, 0) == NULL) goto _OVER;
 
   code = 0;
 

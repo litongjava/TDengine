@@ -19,6 +19,12 @@
 #include "vnd.h"
 #include "libs/function/tudf.h"
 
+static void vmGenerateArbToken(int32_t vgId, char *buf) {
+  int32_t randVal = taosSafeRand() % 1000;
+  int64_t currentMs = taosGetTimestampMs();
+  sprintf(buf, "v%d#%"PRId64"#%d" , vgId, currentMs, randVal);
+}
+
 int32_t vmGetPrimaryDisk(SVnodeMgmt *pMgmt, int32_t vgId) {
   int32_t    diskId = -1;
   SVnodeObj *pVnode = NULL;
@@ -138,6 +144,7 @@ int32_t vmOpenVnode(SVnodeMgmt *pMgmt, SWrapperCfg *pCfg, SVnode *pImpl) {
   pVnode->dropped = 0;
   pVnode->failed = 0;
   pVnode->path = taosStrdup(pCfg->path);
+  vmGenerateArbToken(pVnode->vgId, pVnode->arbToken);
   pVnode->pImpl = pImpl;
 
   if (pVnode->path == NULL) {

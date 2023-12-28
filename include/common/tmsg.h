@@ -2130,18 +2130,24 @@ typedef struct {
 
 int32_t tSerializeSVArbHeartBeatReq(void* buf, int32_t bufLen, SVArbHeartBeatReq* pReq);
 int32_t tDeserializeSVArbHeartBeatReq(void* buf, int32_t bufLen, SVArbHeartBeatReq* pReq);
+void    tFreeSVArbHeartBeatReq(SVArbHeartBeatReq* pReq);
 
 typedef struct {
-  int32_t dnodeId;
   int32_t vgId;
+  int32_t seqNo;
+  char    arbToken[TD_ARB_TOKEN_SIZE];
+} SVArbHeartBeatSeqToken;
+
+typedef struct {
   int32_t arbId;
   char    arbToken[TD_ARB_TOKEN_SIZE];
-  int32_t seqNo;
-  char    vnodeArbToken[TD_ARB_TOKEN_SIZE];
+  int32_t dnodeId;
+  SArray* arbSeqTokenArray; // SVArbHeartBeatSeqToken
 } SVArbHeartBeatRsp;
 
 int32_t tSerializeSVArbHeartBeatRsp(void* buf, int32_t bufLen, SVArbHeartBeatRsp* pReq);
 int32_t tDeserializeSVArbHeartBeatRsp(void* buf, int32_t bufLen, SVArbHeartBeatRsp* pReq);
+void    tFreeSVArbHeartBeatRsp(SVArbHeartBeatRsp* pRsp);
 
 typedef struct {
   char queryStrId[TSDB_QUERY_ID_LEN];

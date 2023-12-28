@@ -43,9 +43,22 @@ typedef struct {
   SArray *vgroups;  // SArbitratorVgroupInfo
 } SArbitratorInfo;
 
+typedef struct {
+  int32_t dnodeId;
+  char    token[TD_ARB_TOKEN_SIZE];
+} SArbVgMember;
+
+typedef struct {
+  SArbVgMember m1;
+  SArbVgMember m2;
+  bool         isSync;
+  SArbVgMember assignedLeader;
+} SArbVgroup;
+
 struct SArbitrator {
   SArbitratorInfo arbInfo;
   SHashObj       *hbSeqMap; // key: ((int64_t)dnodeId << 32) + vgId, value: SArbHbSeqNum
+  SHashObj       *stateMap; // key: vgId, value: SArbVgMemberState
   char            arbToken[TD_ARB_TOKEN_SIZE];
   SMsgCb          msgCb;
   char            path[];

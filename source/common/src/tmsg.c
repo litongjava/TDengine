@@ -5891,11 +5891,109 @@ int32_t tDeserializeSArbTimerReq(void *buf, int32_t bufLen, SArbTimerReq *pReq) 
   return 0;
 }
 
-int32_t tSerializeSVArbHeartBeatReq(void *buf, int32_t bufLen, SVArbHeartBeatReq *pReq) { return -1; }
-int32_t tDeserializeSVArbHeartBeatReq(void *buf, int32_t bufLen, SVArbHeartBeatReq *pReq) { return -1; }
+int32_t tSerializeSVArbHeartBeatReq(void *buf, int32_t bufLen, SVArbHeartBeatReq *pReq) {
+  SEncoder encoder = {0};
+  tEncoderInit(&encoder, buf, bufLen);
 
-int32_t tSerializeSVArbHeartBeatRsp(void *buf, int32_t bufLen, SVArbHeartBeatRsp *pReq) { return -1; }
-int32_t tDeserializeSVArbHeartBeatRsp(void *buf, int32_t bufLen, SVArbHeartBeatRsp *pReq) { return -1; }
+  if (tStartEncode(&encoder) < 0) return -1;
+  if (tEncodeI32(&encoder, pReq->arbId) < 0) return -1;
+  if (tEncodeBinary(&encoder, pReq->arbToken, TD_ARB_TOKEN_SIZE) < 0) return -1;
+  if (tEncodeI32(&encoder, pReq->dnodeId) < 0) return -1;
+  int32_t sz = taosArrayGetSize(pReq->arbSeqArray);
+  if (tEncodeI32(&encoder, sz) < 0) return -1;
+  for (int32_t i = 0; i < sz; i++) {
+    SVArbHeartBeatSeq *pArbHbSeq = taosArrayGet(pReq->arbSeqArray, i);
+    if (tEncodeI32(&encoder, pArbHbSeq->vgId) < 0) return -1;
+    if (tEncodeI32(&encoder, pArbHbSeq->seqNo) < 0) return -1;
+  }
+  tEndEncode(&encoder);
+
+  int32_t tlen = encoder.pos;
+  tEncoderClear(&encoder);
+  return tlen;
+}
+
+int32_t tDeserializeSVArbHeartBeatReq(void *buf, int32_t bufLen, SVArbHeartBeatReq *pReq) {
+  SDecoder decoder = {0};
+  tDecoderInit(&decoder, buf, bufLen);
+
+  if (tStartDecode(&decoder) < 0) return -1;
+  if (tDecodeI32(&decoder, &pReq->arbId) < 0) return -1;
+  if (tDecodeCStrTo(&decoder, pReq->arbToken) < 0) return -1;
+  if (tDecodeI32(&decoder, &pReq->dnodeId) < 0) return -1;
+  int32_t sz = 0;
+  if (tDecodeI32(&decoder, &sz) < 0) return -1;
+  pReq->arbSeqArray =taosArrayInit(sz, sizeof(SVArbHeartBeatSeq));
+  for (int32_t i = 0; i < sz; i++) {
+    SVArbHeartBeatSeq arbHbSeq = {0};
+    if (tDecodeI32(&decoder, &arbHbSeq.vgId) < 0) return -1;
+    if (tDecodeI32(&decoder, &arbHbSeq.seqNo) < 0) return -1;
+  }
+  tEndDecode(&decoder);
+
+  tDecoderClear(&decoder);
+  return 0;
+}
+
+void tFreeSVArbHeartBeatReq(SVArbHeartBeatReq *pReq) {
+  if (NULL == pReq) {
+    return;
+  }
+  taosArrayDestroy(pReq->arbSeqArray);
+}
+
+int32_t tSerializeSVArbHeartBeatRsp(void *buf, int32_t bufLen, SVArbHeartBeatRsp *pRsp) {
+  SEncoder encoder = {0};
+  tEncoderInit(&encoder, buf, bufLen);
+
+  if (tStartEncode(&encoder) < 0) return -1;
+  if (tEncodeI32(&encoder, pRsp->arbId) < 0) return -1;
+  if (tEncodeBinary(&encoder, pRsp->arbToken, TD_ARB_TOKEN_SIZE) < 0) return -1;
+  if (tEncodeI32(&encoder, pRsp->dnodeId) < 0) return -1;
+  int32_t sz = taosArrayGetSize(pRsp->arbSeqTokenArray);
+  if (tEncodeI32(&encoder, sz) < 0) return -1;
+  for (int32_t i = 0; i < sz; i++) {
+    SVArbHeartBeatSeqToken *pArbHbSeqTk = taosArrayGet(pRsp->arbSeqTokenArray, i);
+    if (tEncodeI32(&encoder, pArbHbSeqTk->vgId) < 0) return -1;
+    if (tEncodeI32(&encoder, pArbHbSeqTk->seqNo) < 0) return -1;
+    if (tEncodeBinary(&encoder, pArbHbSeqTk->arbToken, TD_ARB_TOKEN_SIZE) < 0) return -1;
+  }
+  tEndEncode(&encoder);
+
+  int32_t tlen = encoder.pos;
+  tEncoderClear(&encoder);
+  return tlen;
+}
+
+int32_t tDeserializeSVArbHeartBeatRsp(void *buf, int32_t bufLen, SVArbHeartBeatRsp *pRsp) {
+  SDecoder decoder = {0};
+  tDecoderInit(&decoder, buf, bufLen);
+
+  if (tStartDecode(&decoder) < 0) return -1;
+  if (tDecodeI32(&decoder, &pRsp->arbId) < 0) return -1;
+  if (tDecodeCStrTo(&decoder, pRsp->arbToken) < 0) return -1;
+  if (tDecodeI32(&decoder, &pRsp->dnodeId) < 0) return -1;
+  int32_t sz = 0;
+  if (tDecodeI32(&decoder, &sz) < 0) return -1;
+  pRsp->arbSeqTokenArray = taosArrayInit(sz, sizeof(SVArbHeartBeatRsp));
+  for (int32_t i = 0; i < sz; i++) {
+    SVArbHeartBeatSeqToken arbHbSeqTk = {0};
+    if (tDecodeI32(&decoder, &arbHbSeqTk.vgId) < 0) return -1;
+    if (tDecodeI32(&decoder, &arbHbSeqTk.seqNo) < 0) return -1;
+    if (tDecodeCStrTo(&decoder, arbHbSeqTk.arbToken) < 0) return -1;
+  }
+  tEndDecode(&decoder);
+
+  tDecoderClear(&decoder);
+  return 0;
+}
+
+void tFreeSVArbHeartBeatRsp(SVArbHeartBeatRsp *pRsp) {
+  if (NULL == pRsp) {
+    return;
+  }
+  taosArrayDestroy(pRsp->arbSeqTokenArray);
+}
 
 int32_t tSerializeSAuthReq(void *buf, int32_t bufLen, SAuthReq *pReq) {
   SEncoder encoder = {0};
