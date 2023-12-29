@@ -18,11 +18,11 @@
 
 #include "os.h"
 
+#include "tjson.h"
 #include "tlog.h"
 #include "tmsg.h"
 #include "tmsgcb.h"
 #include "trpc.h"
-#include "tjson.h"
 
 #include "arbitrator.h"
 
@@ -33,42 +33,61 @@ extern "C" {
 #define ARB_INFO_FNAME     "arbitrator.json"
 #define ARB_INFO_FNAME_TMP "arbitrator_tmp.json"
 
+/* --------------------- SArbitratorInfo --------------------- */
 typedef struct {
-  int32_t  hbSeq;
-  int32_t  lastHbSeq;
-} SArbHbSeqNum;
+  int32_t   arbId;
+  SHashObj *arbGroupMap;  // key: groupId, value: SArbGroup
+} SArbitratorDiskDate;
 
-typedef struct {
-  int32_t arbId;
-  SArray *vgroups;  // SArbitratorVgroupInfo
-} SArbitratorInfo;
-
+/* --------------------- SArbGroup --------------------- */
 typedef struct {
   int32_t dnodeId;
   char    token[TD_ARB_TOKEN_SIZE];
-} SArbVgMember;
+} SArbAssignedLeader;
 
 typedef struct {
-  SArbVgMember m1;
-  SArbVgMember m2;
-  bool         isSync;
-  SArbVgMember assignedLeader;
-} SArbVgroup;
+  int32_t dnodeId;
+} SArbMemberInfo;
 
+typedef struct {
+  int32_t nextHbSeq;
+  int32_t responsedHbSeq;
+  char    token[TD_ARB_TOKEN_SIZE];
+} SArbMemberState;
+
+typedef struct {
+  SArbMemberInfo  info;
+  SArbMemberState state;
+} SArbGroupMember;
+
+typedef struct {
+  SArbGroupMember    members[2];
+  bool               isSync;
+  SArbAssignedLeader assignedLeader;
+} SArbGroup;
+
+/* --------------------- SArbDnode --------------------- */
+typedef struct {
+  int32_t port;
+  char    fqdn[TSDB_FQDN_LEN];
+  SArray *groupIds;
+} SArbDnode;
+
+/* --------------------- SArbitrator --------------------- */
 struct SArbitrator {
-  SArbitratorInfo arbInfo;
-  SHashObj       *hbSeqMap; // key: ((int64_t)dnodeId << 32) + vgId, value: SArbHbSeqNum
-  SHashObj       *stateMap; // key: vgId, value: SArbVgMemberState
+  int32_t         arbId;
+  SHashObj       *arbGroupMap;  // key: groupId, value: SArbGroup
+  SHashObj       *arbDnodeMap;  // key: dnodeId, value: SArbDnode
   char            arbToken[TD_ARB_TOKEN_SIZE];
   SMsgCb          msgCb;
   char            path[];
 };
 
 int32_t arbitratorUpdateInfo(const char *dir, SArbitratorInfo *pInfo);
-int64_t arbitratorGenerateHbSeqKey(int32_t dnodeId, int32_t vgId);
 
 #ifdef __cplusplus
 }
 #endif
 
 #endif /*_TD_ARBITRATOR_INT_H_*/
+s

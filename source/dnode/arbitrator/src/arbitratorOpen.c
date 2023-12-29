@@ -17,9 +17,8 @@
 #include "arbitrator.h"
 
 static void      arbitratorGenerateArbToken(int32_t arbId, char *buf);
-static SHashObj *arbitratorInitHbSeqMap(SArray *array);
 
-static int arbitratorEncodeInfo(const SArbitratorInfo *pInfo, char **ppData) {
+static int arbitratorEncodeDiskData(const SArbitratorDiskDate *pData, char **ppData) {
   SJson *pJson;
   char  *pData;
 
@@ -30,33 +29,36 @@ static int arbitratorEncodeInfo(const SArbitratorInfo *pInfo, char **ppData) {
     return -1;
   }
 
-  if (tjsonAddIntegerToObject(pJson, "arbId", pInfo->arbId) < 0) goto _err;
+  if (tjsonAddIntegerToObject(pJson, "arbId", pData->arbId) < 0) goto _err;
 
-  SJson *vgroups = tjsonCreateArray();
-  if (vgroups == NULL) goto _err;
-  if (tjsonAddItemToObject(pJson, "vgroups", vgroups) < 0) goto _err;
+  SJson *jGroups = tjsonCreateArray();
+  if (jGroups == NULL) goto _err;
+  if (tjsonAddItemToObject(pJson, "groups", jGroups) < 0) goto _err;
 
-  int32_t vgNum = taosArrayGetSize(pInfo->vgroups);
-  for (int i = 0; i < vgNum; i++) {
-    SJson *info = tjsonCreateObject();
-    if (info == NULL) goto _err;
-    if (tjsonAddItemToArray(vgroups, info) < 0) goto _err;
-    SArbitratorVgroupInfo *pVgInfo = taosArrayGet(pInfo->vgroups, i);
-    if (tjsonAddIntegerToObject(info, "vgId", pVgInfo->vgId) < 0) goto _err;
-    if (tjsonAddIntegerToObject(info, "replica", pVgInfo->replica) < 0) goto _err;
-
-    SJson *replicas = tjsonCreateArray();
-    if (replicas == NULL) goto _err;
-    if (tjsonAddItemToObject(info, "replicas", replicas) < 0) goto _err;
-    for (int j = 0; j < pVgInfo->replica; j++) {
-      SJson *replica = tjsonCreateObject();
-      if (info == NULL) goto _err;
-      if (tjsonAddItemToArray(replicas, replica) < 0) goto _err;
-      SReplica *pReplica = &pVgInfo->replicas[j];
-      if (tjsonAddIntegerToObject(replica, "id", pReplica->id) < 0) goto _err;
-      if (tjsonAddIntegerToObject(replica, "port", pReplica->port) < 0) goto _err;
-      if (tjsonAddStringToObject(replica, "fqdn", pReplica->fqdn) < 0) goto _err;
+  void *iter = taosHashIterate(pData->arbGroupMap, NULL);
+  while (iter != NULL) {
+    SJson *jGroup = tjsonCreateObject();
+    if (jGroup == NULL) goto _err;
+    if (tjsonAddItemToArray(jGroups, jGroup) < 0) goto _err;
+    SArbGroup *pGroup = iter;
+    int32_t    keyLen = 0;
+    int32_t   *pGroupId = taosHashGetKey(iter, &keyLen);
+    if (tjsonAddIntegerToObject(jGroup, "groupId", *pGroupId) < 0) goto _err;
+    SJson *jMembers = tjsonCreateArray();
+    if (jMembers == NULL) goto _err;
+    if (tjsonAddItemToObject(jGroup, "members", jMembers) < 0) goto _err;
+    for (int j = 0; j < 2; j++) {
+      SJson *jMember = tjsonCreateObject();
+      if (jMember == NULL) goto _err;
+      if (tjsonAddItemToArray(jMembers, jMember) < 0) goto _err;
+      SArbGroupMember *pMember = &pGroup->members[j];
+      if (tjsonAddIntegerToObject(jMember, "dnodeId", pMember->info.dnodeId) < 0) goto _err;
     }
+    SJson *jAssignedLeader = tjsonCreateObject();
+    if (jAssignedLeader == NULL) goto _err;
+    if (tjsonAddItemToObject(jAssignedLeader, "assignedLeader", jGroup) < 0) goto _err;
+    if (tjsonAddIntegerToObject(jAssignedLeader, "dnodeId", pGroup->assignedLeader.dnodeId) < 0) goto _err;
+    if (tjsonAddStringToObject(jAssignedLeader, "token", pGroup->assignedLeader.token) < 0) goto _err;
   }
 
   pData = tjsonToString(pJson);
@@ -74,7 +76,7 @@ _err:
   return -1;
 }
 
-static int arbitratorDecodeInfo(uint8_t *pData, SArbitratorInfo *pInfo) {
+static int arbitratorDecodeDiskData(uint8_t *pData, SArbitratorDiskDate *pDate) {
   SJson *pJson = NULL;
 
   pJson = tjsonParse(pData);
@@ -82,27 +84,37 @@ static int arbitratorDecodeInfo(uint8_t *pData, SArbitratorInfo *pInfo) {
     return -1;
   }
 
-  if (tjsonGetIntValue(pJson, "arbId", &pInfo->arbId) < 0) goto _err;
+  if (tjsonGetIntValue(pJson, "arbId", &pDate->arbId) < 0) goto _err;
 
-  SJson *vgroups = tjsonGetObjectItem(pJson, "vgroups");
-  int    vgNum = tjsonGetArraySize(vgroups);
-  pInfo->vgroups = taosArrayInit(vgNum, sizeof(SArbitratorVgroupInfo));
-  for (int i = 0; i < vgNum; i++) {
-    SJson *info = tjsonGetArrayItem(vgroups, i);
-    if (info == NULL) goto _err;
-    SArbitratorVgroupInfo vgInfo = {0};
-    if (tjsonGetIntValue(info, "vgId", &vgInfo.vgId) < 0) goto _err;
-    if (tjsonGetTinyIntValue(info, "replica", &vgInfo.replica) < 0) goto _err;
-    SJson *replicas = tjsonGetObjectItem(info, "replicas");
-    for (int j = 0; j < vgInfo.replica; j++) {
-      SJson *replica = tjsonGetArrayItem(replicas, j);
-      if (info == NULL) goto _err;
-      SReplica *pReplica = &vgInfo.replicas[j];
-      if (tjsonGetIntValue(replica, "id", &pReplica->id) < 0) goto _err;
-      if (tjsonGetSmallIntValue(replica, "port", &pReplica->port) < 0) goto _err;
-      if (tjsonGetStringValue(replica, "fqdn", pReplica->fqdn) < 0) goto _err;
+  SJson *groups = tjsonGetObjectItem(pJson, "groups");
+  int    groupNum = tjsonGetArraySize(groups);
+  pDate->arbGroupMap = taosHashInit(64, taosGetDefaultHashFunction(TSDB_DATA_TYPE_INT), true, HASH_NO_LOCK);
+  for (int i = 0; i < groupNum; i++) {
+    SJson *jGroup = tjsonGetArrayItem(groups, i);
+    if (jGroup == NULL) goto _err;
+    int32_t groupId = 0;
+    if (tjsonGetIntValue(jGroup, "groupId", &groupId) < 0) goto _err;
+    SArbGroup arbGroup = {0};
+    SJson    *jMembers = tjsonGetObjectItem(jGroup, "members");
+    for (int j = 0; j < 2; j++) {
+      SJson *jMember = tjsonGetArrayItem(jMembers, j);
+      if (jMember == NULL) goto _err;
+      SArbGroupMember *pMember = &arbGroup.members[j];
+      if (tjsonGetIntValue(jMember, "dnodeId", &pMember->info.dnodeId) < 0) goto _err;
     }
-    taosArrayPush(pInfo->vgroups, &vgInfo);
+    SJson *jAssignedLeader = tjsonGetObjectItem(jGroup, "assignedLeader");
+    if (tjsonGetIntValue(jAssignedLeader, "dnodeId", &arbGroup.assignedLeader.dnodeId) < 0) goto _err;
+    if (tjsonGetStringValue(jAssignedLeader, "token", &arbGroup.assignedLeader.token) < 0) goto _err;
+
+    {  // init other values
+      arbGroup.isSync = false;
+      for (int j = 0; j < 2; j++) {
+        arbGroup.members[j].state.nextHbSeq = 0;
+        arbGroup.members[j].state.responsedHbSeq = -1;
+      }
+    }
+
+    taosHashPut(pDate->arbGroupMap, &groupId, sizeof(int32_t), &arbGroup, sizeof(SArbGroup));
   }
 
   tjsonDelete(pJson);
@@ -114,7 +126,7 @@ _err:
   return -1;
 }
 
-static int32_t arbitratorLoadInfo(const char *dir, SArbitratorInfo *pInfo) {
+static int32_t arbitratorLoadDiskData(const char *dir, SArbitratorDiskDate *pDate) {
   char      fname[TSDB_FILENAME_LEN];
   TdFilePtr pFile = NULL;
   char     *pData = NULL;
@@ -122,7 +134,7 @@ static int32_t arbitratorLoadInfo(const char *dir, SArbitratorInfo *pInfo) {
 
   snprintf(fname, TSDB_FILENAME_LEN, "%s%s%s", dir, TD_DIRSEP, ARB_INFO_FNAME);
 
-  // read info
+  // read diskData
   pFile = taosOpenFile(fname, TD_FILE_READ);
   if (pFile == NULL) {
     terrno = TAOS_SYSTEM_ERROR(errno);
@@ -149,8 +161,8 @@ static int32_t arbitratorLoadInfo(const char *dir, SArbitratorInfo *pInfo) {
 
   taosCloseFile(&pFile);
 
-  // decode info
-  if (arbitratorDecodeInfo(pData, pInfo) < 0) {
+  // decode diskData
+  if (arbitratorDecodeDiskData(pData, pDate) < 0) {
     taosMemoryFree(pData);
     return -1;
   }
@@ -165,47 +177,47 @@ _err:
   return -1;
 }
 
-static int32_t arbitratorSaveInfo(const char *dir, SArbitratorInfo *pInfo) {
+static int32_t arbitratorSaveDiskData(const char *dir, SArbitratorDiskDate *pData) {
   char      fname[TSDB_FILENAME_LEN];
   TdFilePtr pFile;
   char     *data;
 
   snprintf(fname, TSDB_FILENAME_LEN, "%s%s%s", dir, TD_DIRSEP, ARB_INFO_FNAME_TMP);
 
-  // encode info
+  // encode disk data
   data = NULL;
 
-  if (arbitratorEncodeInfo(pInfo, &data) < 0) {
-    arbError("failed to encode json info.");
+  if (arbitratorEncodeDiskData(pData, &data) < 0) {
+    arbError("failed to encode json disk data.");
     return -1;
   }
 
-  // save info to a arbitrator_tmp.json
+  // save disk data to a arbitrator_tmp.json
   pFile = taosOpenFile(fname, TD_FILE_CREATE | TD_FILE_WRITE | TD_FILE_TRUNC | TD_FILE_WRITE_THROUGH);
   if (pFile == NULL) {
-    arbError("failed to open info file:%s for write:%s", fname, terrstr());
+    arbError("failed to open disk data file:%s for write:%s", fname, terrstr());
     terrno = TAOS_SYSTEM_ERROR(errno);
     return -1;
   }
 
   if (taosWriteFile(pFile, data, strlen(data)) < 0) {
-    arbError("failed to write info file:%s error:%s", fname, terrstr());
+    arbError("failed to write disk data file:%s error:%s", fname, terrstr());
     terrno = TAOS_SYSTEM_ERROR(errno);
     goto _err;
   }
 
   if (taosFsyncFile(pFile) < 0) {
-    arbError("failed to fsync info file:%s error:%s", fname, terrstr());
+    arbError("failed to fsync disk data file:%s error:%s", fname, terrstr());
     terrno = TAOS_SYSTEM_ERROR(errno);
     goto _err;
   }
 
   taosCloseFile(&pFile);
 
-  // free info binary
+  // free disk data binary
   taosMemoryFree(data);
 
-  arbInfo("arbId:%d, arbitrator info is saved, fname:%s", pInfo->arbId, fname);
+  arbInfo("arbId:%d, arbitrator disk data is saved, fname:%s", pData->arbId, fname);
 
   return 0;
 
@@ -215,7 +227,7 @@ _err:
   return -1;
 }
 
-static int32_t arbitratorCommitInfo(const char *dir) {
+static int32_t arbitratorCommitDiskData(const char *dir) {
   char fname[TSDB_FILENAME_LEN];
   char tfname[TSDB_FILENAME_LEN];
 
@@ -227,22 +239,20 @@ static int32_t arbitratorCommitInfo(const char *dir) {
     return -1;
   }
 
-  arbInfo("arbitrator info is committed, dir:%s", dir);
+  arbInfo("arbitrator disk data is committed, dir:%s", dir);
   return 0;
 }
 
-int32_t arbitratorUpdateInfo(const char *dir, SArbitratorInfo *pInfo) {
-  if (arbitratorSaveInfo(dir, pInfo) < 0 || arbitratorCommitInfo(dir) < 0) {
-    arbError("arbId:%d, failed to save arbitrator config since %s", pInfo->arbId, tstrerror(terrno));
+int32_t arbitratorUpdateDiskData(const char *dir, SArbitratorDiskDate *pData) {
+  if (arbitratorSaveDiskData(dir, pData) < 0 || arbitratorCommitDiskData(dir) < 0) {
+    arbError("arbId:%d, failed to save arbitrator config since %s", pData->arbId, tstrerror(terrno));
     return -1;
   }
   return 0;
 }
 
-int64_t arbitratorGenerateHbSeqKey(int32_t dnodeId, int32_t vgId) { return ((int64_t)dnodeId << 32) + vgId; }
-
 int32_t arbitratorCreate(const char *path, int32_t arbId) {
-  SArbitratorInfo info = {0};
+  SArbitratorDiskDate diskData = {0};
   char            dir[TSDB_FILENAME_LEN] = {0};
 
   // create arbitrator env
@@ -251,21 +261,21 @@ int32_t arbitratorCreate(const char *path, int32_t arbId) {
     return TAOS_SYSTEM_ERROR(errno);
   }
 
-  info.arbId = arbId;
+  diskData.arbId = arbId;
 
-  SArbitratorInfo oldInfo = {0};
-  oldInfo.arbId = -1;
-  if (arbitratorLoadInfo(path, &oldInfo) == 0) {
-    arbWarn("vgId:%d, arbitrator config info already exists at %s.", oldInfo.arbId, path);
-    return (oldInfo.arbId == info.arbId) ? 0 : -1;
+  SArbitratorDiskDate oldDiskData = {0};
+  oldDiskData.arbId = -1;
+  if (arbitratorLoadDiskData(path, &oldDiskData) == 0) {
+    arbWarn("vgId:%d, arbitrator disk data already exists at %s.", oldDiskData.arbId, path);
+    return (oldDiskData.arbId == diskData.arbId) ? 0 : -1;
   }
 
-  arbInfo("arbId:%d, save config while create", info.arbId);
-  if (arbitratorUpdateInfo(path, &info) < 0) {
+  arbInfo("arbId:%d, save config while create", diskData.arbId);
+  if (arbitratorUpdateDiskData(path, &diskData) < 0) {
     return -1;
   }
 
-  arbInfo("arbId:%d, arbitrator is created", info.arbId);
+  arbInfo("arbId:%d, arbitrator is created", diskData.arbId);
   return 0;
 }
 
@@ -275,16 +285,16 @@ void arbitratorDestroy(const char *path) {
 }
 
 SArbitrator *arbitratorOpen(const char *path, SMsgCb msgCb) {
-  SArbitrator    *pArbitrator = NULL;
-  SArbitratorInfo info = {0};
-  char            dir[TSDB_FILENAME_LEN] = {0};
-  int32_t         ret = 0;
+  SArbitrator        *pArbitrator = NULL;
+  SArbitratorDiskDate diskDate = {0};
+  char                dir[TSDB_FILENAME_LEN] = {0};
+  int32_t             ret = 0;
   terrno = TSDB_CODE_SUCCESS;
 
-  info.arbId = -1;
+  diskDate.arbId = -1;
 
-  // load arbitrator info
-  ret = arbitratorLoadInfo(path, &info);
+  // load arbitrator disk data
+  ret = arbitratorLoadDiskData(path, &diskDate);
   if (ret < 0) {
     arbError("failed to open arbitrator from %s since %s", path, tstrerror(terrno));
     terrno = TSDB_CODE_NEED_RETRY;
@@ -295,14 +305,13 @@ SArbitrator *arbitratorOpen(const char *path, SMsgCb msgCb) {
   pArbitrator = taosMemoryCalloc(1, sizeof(*pArbitrator) + strlen(path) + 1);
   if (pArbitrator == NULL) {
     terrno = TSDB_CODE_OUT_OF_MEMORY;
-    arbError("arbId:%d, failed to open arbitrator since %s", info.arbId, tstrerror(terrno));
+    arbError("arbId:%d, failed to open arbitrator since %s", diskDate.arbId, tstrerror(terrno));
     return NULL;
   }
 
-  pArbitrator->arbInfo.arbId = info.arbId;
-  pArbitrator->arbInfo.vgroups = info.vgroups;
-  pArbitrator->hbSeqMap = arbitratorInitHbSeqMap(pArbitrator->arbInfo.vgroups);
-  arbitratorGenerateArbToken(pArbitrator->arbInfo.arbId, pArbitrator->arbToken);
+  pArbitrator->arbId = diskDate.arbId;
+  pArbitrator->arbGroupMap = diskDate.arbGroupMap;
+  pArbitrator->arbDnodeMap = taosHashInit(64, taosGetDefaultHashFunction(TSDB_DATA_TYPE_INT), true, HASH_NO_LOCK);
   pArbitrator->msgCb = msgCb;
   strcpy(pArbitrator->path, path);
 
@@ -315,7 +324,7 @@ _err:
 
 void arbitratorClose(SArbitrator *pArbitrator) {
   if (pArbitrator) {
-    taosHashCleanup(pArbitrator->hbSeqMap);
+    taosHashCleanup(pArbitrator->arbGroupMap);
     taosMemoryFree(pArbitrator);
   }
 }
@@ -324,19 +333,4 @@ static void arbitratorGenerateArbToken(int32_t arbId, char *buf) {
   int32_t randVal = taosSafeRand() % 1000;
   int64_t currentMs = taosGetTimestampMs();
   sprintf(buf, "a%d#%" PRId64 "#%d", arbId, currentMs, randVal);
-}
-
-static SHashObj *arbitratorInitHbSeqMap(SArray *array) {
-  SHashObj    *hbSeqMap = taosHashInit(64, taosGetDefaultHashFunction(TSDB_DATA_TYPE_BIGINT), true, HASH_NO_LOCK);
-  SArbHbSeqNum hbSeqNumInit = {0};
-
-  int32_t arraySize = taosArrayGetSize(array);
-  for (int32_t i = 0; i < arraySize; i++) {
-    SArbitratorVgroupInfo *pVgInfo = taosArrayGet(array, i);
-    for (int32_t j = 0; j < pVgInfo->replica; j++) {
-      int64_t hbSeqKey = arbitratorGenerateHbSeqKey(pVgInfo->replicas[j].id, pVgInfo->vgId);
-      taosHashPut(hbSeqMap, &hbSeqKey, sizeof(int64_t), &hbSeqNumInit, sizeof(SArbHbSeqNum));
-    }
-  }
-  return hbSeqMap;
 }

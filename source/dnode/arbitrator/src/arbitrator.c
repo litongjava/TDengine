@@ -16,16 +16,16 @@
 #include "arbInt.h"
 #include "tmisce.h"
 
-static int32_t arbitratorProcessSetVgroupsReq(SArbitrator *pArb, SRpcMsg *pMsg) {
-  SArbSetVgroupsReq setReq = {0};
-  if (tDeserializeSArbSetVgroupsReq(pMsg->pCont, pMsg->contLen, &setReq) != 0) {
+static int32_t arbitratorProcessSetGroupsReq(SArbitrator *pArb, SRpcMsg *pMsg) {
+  SArbSetGroupsReq setReq = {0};
+  if (tDeserializeSArbSetGroupsReq(pMsg->pCont, pMsg->contLen, &setReq) != 0) {
     terrno = TSDB_CODE_INVALID_MSG;
     return -1;
   }
 
-  if (setReq.arbId != pArb->arbInfo.arbId) {
+  if (setReq.arbId != pArb->arbId) {
     terrno = TSDB_CODE_INVALID_MSG;
-    arbError("arbId not matched local:%d, msg:%d", pArb->arbInfo.arbId, setReq.arbId);
+    arbError("arbId not matched local:%d, msg:%d", pArb->arbId, setReq.arbId);
     return -1;
   }
 
@@ -33,8 +33,8 @@ static int32_t arbitratorProcessSetVgroupsReq(SArbitrator *pArb, SRpcMsg *pMsg) 
   pArb->arbInfo.vgroups = setReq.vgroups;
   setReq.vgroups = tmp;
 
-  arbInfo("arbId:%d, save config while process set vgroups", pArb->arbInfo.arbId);
-  if (arbitratorUpdateInfo(pArb->path, &pArb->arbInfo) < 0) {
+  arbInfo("arbId:%d, save config while process set vgroups", pArb->arbId);
+  if (arbitratorUpdateDiskData(pArb->path, &pArb->arbInfo) < 0) {
     return -1;
   }
 
@@ -46,37 +46,6 @@ typedef struct {
   uint16_t port;
   SArray  *array;
 } SArbHbDnodeInfo;
-
-static void arbitratorCollectSArbHbDnodeInfo(SArbitrator *pArb, SHashObj *pHash) {
-  SArray *pVgInfoArray = pArb->arbInfo.vgroups;
-  int32_t arraySize = taosArrayGetSize(pVgInfoArray);
-  for (int32_t i = 0; i < arraySize; i++) {
-    SArbitratorVgroupInfo *pVgInfo = taosArrayGet(pVgInfoArray, i);
-    for (int32_t j = 0; j < pVgInfo->replica; j++) {
-      SReplica *pReplica = &pVgInfo->replicas[j];
-      SArbHbDnodeInfo *pDnodeInfo = taosHashGet(pHash, &pReplica->id, sizeof(int32_t));
-      if (!pDnodeInfo) {
-        SArbHbDnodeInfo dnodeInfo = {0};
-        memcpy(dnodeInfo.fqdn, pReplica->fqdn, TSDB_FQDN_LEN);
-        dnodeInfo.port = pReplica->port;
-        dnodeInfo.array = taosArrayInit(16, sizeof(SVArbHeartBeatSeq));
-        taosHashPut(pHash, &pReplica->id, sizeof(int32_t), &dnodeInfo, sizeof(SArbHbDnodeInfo));
-        pDnodeInfo = taosHashGet(pHash, &pReplica->id, sizeof(int32_t));
-      }
-      SVArbHeartBeatSeq seq = {.vgId = pVgInfo->vgId};
-      int64_t           key = arbitratorGenerateHbSeqKey(pReplica->id, pVgInfo->vgId);
-      SArbHbSeqNum     *pHbSeqNum = taosHashGet(pArb->hbSeqMap, &key, sizeof(int64_t));
-      if (!pHbSeqNum) {
-        SArbHbSeqNum seqNum = {.hbSeq = 0, .lastHbSeq = -1};
-        taosHashPut(pArb->hbSeqMap, &key, sizeof(int64_t), &seqNum, sizeof(SArbHbSeqNum));
-        pHbSeqNum = taosHashGet(pArb->hbSeqMap, &key, sizeof(int64_t));
-      }
-
-      seq.seqNo = pHbSeqNum->hbSeq++; // update seq of dnode-vg
-      taosArrayPush(pDnodeInfo->array, &seq);
-    }
-  }
-}
 
 static int32_t arbitratorProcessArbHeartBeatTimer(SArbitrator *pArb, SRpcMsg *pMsg) {
   SHashObj *pHash = taosHashInit(64, taosGetDefaultHashFunction(TSDB_DATA_TYPE_INT), false, HASH_NO_LOCK);
@@ -91,7 +60,7 @@ static int32_t arbitratorProcessArbHeartBeatTimer(SArbitrator *pArb, SRpcMsg *pM
     SArbHbDnodeInfo *pDnodeInfo = pIter;
 
     SVArbHeartBeatReq req = {0};
-    req.arbId = pArb->arbInfo.arbId;
+    req.arbId = pArb->arbId;
     memcpy(req.arbToken, pArb->arbToken, TD_ARB_TOKEN_SIZE);
     req.dnodeId = dnodeId;
     req.arbSeqArray = pDnodeInfo->array;
@@ -120,13 +89,13 @@ static void arbitratorUpdateVnodeToken(SArbitrator *pArb, int32_t dnodeId, SArra
     int64_t                 key = arbitratorGenerateHbSeqKey(dnodeId, pTk->vgId);
     SArbHbSeqNum           *pSeqNum = taosHashAcquire(pArb->hbSeqMap, &key, sizeof(int64_t));
     if (!pSeqNum) {
-      arbInfo("arbId:%d, update dnode:%d vnode:%d token failed, no local seqNum found", pArb->arbInfo.arbId, dnodeId,
+      arbInfo("arbId:%d, update dnode:%d vnode:%d token failed, no local seqNum found", pArb->arbId, dnodeId,
               pTk->vgId);
       continue;
     }
 
     if (pSeqNum->lastHbSeq >= pTk->seqNo) {
-      arbInfo("arbId:%d, update dnode:%d vnode:%d token failed, seqNo expired, msg:%d local:%d", pArb->arbInfo.arbId,
+      arbInfo("arbId:%d, update dnode:%d vnode:%d token failed, seqNo expired, msg:%d local:%d", pArb->arbId,
               dnodeId, pTk->vgId, pTk->seqNo, pSeqNum->lastHbSeq);
       taosHashRelease(pArb->hbSeqMap, pSeqNum);
       continue;
@@ -146,15 +115,15 @@ static int32_t arbitratorProcessArbHeartBeatRsp(SArbitrator *pArb, SRpcMsg *pMsg
     goto _OVER;
   }
 
-  if (arbHbRsp.arbId != pArb->arbInfo.arbId) {
+  if (arbHbRsp.arbId != pArb->arbId) {
     terrno = TSDB_CODE_INVALID_MSG;
-    arbError("arbId not matched local:%d, msg:%d", pArb->arbInfo.arbId, arbHbRsp.arbId);
+    arbError("arbId not matched local:%d, msg:%d", pArb->arbId, arbHbRsp.arbId);
     goto _OVER;
   }
 
   if (strcmp(arbHbRsp.arbToken, pArb->arbToken) != 0) {
     terrno = TSDB_CODE_ARB_TOKEN_MISMATCH;
-    arbInfo("arbId:%d, arbToken not matched local:%s, msg:%s", pArb->arbInfo.arbId, pArb->arbToken, arbHbRsp.arbToken);
+    arbInfo("arbId:%d, arbToken not matched local:%s, msg:%s", pArb->arbId, pArb->arbToken, arbHbRsp.arbToken);
     goto _OVER;
   }
 
@@ -172,7 +141,7 @@ void arbitratorProcessQueue(SQueueInfo *pInfo, SRpcMsg *pMsg) {
   arbTrace("msg:%p, get from arb-mgmt queue", pMsg);
   switch (pMsg->msgType) {
     case TDMT_ARB_SET_VGROUPS:
-      code = arbitratorProcessSetVgroupsReq(pArb, pMsg);
+      code = arbitratorProcessSetGroupsReq(pArb, pMsg);
       break;
     case TDMT_ARB_HEARTBEAT_TIMER:
       code = arbitratorProcessArbHeartBeatTimer(pArb, pMsg);

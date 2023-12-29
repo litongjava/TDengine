@@ -474,7 +474,7 @@ static int32_t mndProcessGetArbitratorsReq(SRpcMsg *pReq) {
   }
 
   getRsp.dnodeId = getReq.dnodeId;
-  getRsp.arbVgroups = taosArrayInit(4, sizeof(SArbitratorVgroups));
+  getRsp.arbVgroups = taosArrayInit(4, sizeof(SArbitratorGroups));
 
   void *pIter = NULL;
   while (1) {
@@ -486,16 +486,16 @@ static int32_t mndProcessGetArbitratorsReq(SRpcMsg *pReq) {
       continue;
     }
 
-    SArbitratorVgroups arbVgroup = {0};
+    SArbitratorGroups arbVgroup = {0};
     arbVgroup.arbId = pArb->id;
-    arbVgroup.vgroups = taosArrayInit(4, sizeof(SArbitratorVgroupInfo));
+    arbVgroup.vgroups = taosArrayInit(4, sizeof(SArbitratorGroupInfo));
 
     int32_t vgNum = taosArrayGetSize(pArb->vgIds);
     for (int32_t i = 0; i < vgNum; i++) {
       int32_t *vgId = taosArrayGet(pArb->vgIds, i);
       SVgObj  *pVgObj = mndAcquireVgroup(pMnode, *vgId);
 
-      SArbitratorVgroupInfo vgInfo = {0};
+      SArbitratorGroupInfo vgInfo = {0};
       vgInfo.vgId = *vgId;
       vgInfo.replica = pVgObj->replica;
       for (int32_t j = 0; j < pVgObj->replica; j++) {

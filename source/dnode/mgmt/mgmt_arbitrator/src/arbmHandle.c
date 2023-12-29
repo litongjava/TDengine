@@ -159,21 +159,21 @@ int32_t arbmProcessGetAribtratorsRsp(SArbitratorMgmt *pMgmt, SRpcMsg *pRsp) {
 
   size_t arbVgNum = taosArrayGetSize(getRsp.arbVgroups);
   for (int32_t i = 0; i < arbVgNum; i++) {
-    SArbitratorVgroups *pArbVg = taosArrayGet(getRsp.arbVgroups, i);
+    SArbitratorGroups *pArbVg = taosArrayGet(getRsp.arbVgroups, i);
     SArbitratorObj     *pArbObj = arbmAcquireArbitrator(pMgmt, pArbVg->arbId);
     if (pArbObj == NULL) {
       dInfo("failed to process get-arbitrators rsp, arbitrator:%d not exist", pArbVg->arbId);
       goto _OVER;
     }
 
-    int32_t contLen = tSerializeSArbSetVgroupsReq(NULL, 0, pArbVg);
+    int32_t contLen = tSerializeSArbSetGroupsReq(NULL, 0, pArbVg);
     void   *pHead = rpcMallocCont(contLen);
     if (pRsp == NULL) {
       terrno = TSDB_CODE_OUT_OF_MEMORY;
       goto _OVER;
     }
 
-    tSerializeSArbSetVgroupsReq(pHead, contLen, pArbVg);
+    tSerializeSArbSetGroupsReq(pHead, contLen, pArbVg);
 
     SRpcMsg rpcMsg = {.pCont = pHead,
                       .contLen = contLen,
