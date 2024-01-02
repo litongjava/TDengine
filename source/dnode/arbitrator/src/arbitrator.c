@@ -29,14 +29,43 @@ static int32_t arbitratorProcessSetGroupsReq(SArbitrator *pArb, SRpcMsg *pMsg) {
     return -1;
   }
 
-  SArray *tmp = pArb->arbInfo.vgroups;
-  pArb->arbInfo.vgroups = setReq.vgroups;
-  setReq.vgroups = tmp;
+  size_t sz = taosArrayGetSize(setReq.groups);
+  for (size_t i; i < sz; i++) {
+    SArbitratorGroupInfo *pInfo = taosArrayGet(setReq.groups, i);
+    int32_t   groupId = pInfo->groupId;
+
+    SArbGroup* pGroup = taosHashGet(pArb->arbGroupMap, &groupId, sizeof(int32_t));
+    if (pGroup) {
+      // TODO(LSG): handle group update
+      continue;
+    }
+
+    SArbGroup group = {0};
+    for (int8_t j; j < pInfo->replica; j++) {
+      SReplica *pReplica = &pInfo->replicas[j];
+      int32_t   dnodeId = pReplica->id;
+      group.members[j].info.dnodeId = dnodeId;
+      group.members[j].state.nextHbSeq = 0;
+      group.members[j].state.responsedHbSeq = -1;
+
+      SArbDnode *pArbDnode = taosHashGet(pArb->arbDnodeMap, &dnodeId, sizeof(int32_t));
+      if (!pArbDnode) {
+        taosArrayPush(pArbDnode->groupIds, &groupId);
+        continue;
+      }
+      SArbDnode arbDnode = {0};
+      arbDnode.port = pReplica->port;
+      memcpy(arbDnode.fqdn, pReplica->fqdn, TSDB_FQDN_LEN);
+      arbDnode.groupIds = taosArrayInit(16, sizeof(int32_t));
+      taosArrayPush(arbDnode.groupIds, &groupId);
+      taosHashPut(pArb->arbDnodeMap, &dnodeId, sizeof(int32_t), &arbDnode, sizeof(SArbDnode));
+    }
+  }
 
   arbInfo("arbId:%d, save config while process set vgroups", pArb->arbId);
-  if (arbitratorUpdateDiskData(pArb->path, &pArb->arbInfo) < 0) {
-    return -1;
-  }
+  // if (arbitratorUpdateDiskData(pArb->path, &pArb->arbInfo) < 0) {
+  //   return -1;
+  // }
 
   return 0;
 }

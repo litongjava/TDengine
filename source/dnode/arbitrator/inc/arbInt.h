@@ -83,11 +83,8 @@ struct SArbitrator {
   char            path[];
 };
 
-int32_t arbitratorUpdateInfo(const char *dir, SArbitratorInfo *pInfo);
-
 #ifdef __cplusplus
 }
 #endif
 
 #endif /*_TD_ARBITRATOR_INT_H_*/
-s
