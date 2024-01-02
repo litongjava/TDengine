@@ -60,9 +60,11 @@ static int32_t arbitratorProcessSetGroupsReq(SArbitrator *pArb, SRpcMsg *pMsg) {
       taosArrayPush(arbDnode.groupIds, &groupId);
       taosHashPut(pArb->arbDnodeMap, &dnodeId, sizeof(int32_t), &arbDnode, sizeof(SArbDnode));
     }
+    taosHashPut(pArb->arbGroupMap, &groupId, sizeof(int32_t), &group, sizeof(SArbGroup));
   }
 
-  arbInfo("arbId:%d, save config while process set vgroups", pArb->arbId);
+  arbInfo("arbId:%d, save config while process set groups", pArb->arbId);
+  // TODO(lsg): update disk data
   // if (arbitratorUpdateDiskData(pArb->path, &pArb->arbInfo) < 0) {
   //   return -1;
   // }
@@ -70,29 +72,29 @@ static int32_t arbitratorProcessSetGroupsReq(SArbitrator *pArb, SRpcMsg *pMsg) {
   return 0;
 }
 
-typedef struct {
-  char     fqdn[TSDB_FQDN_LEN];
-  uint16_t port;
-  SArray  *array;
-} SArbHbDnodeInfo;
-
 static int32_t arbitratorProcessArbHeartBeatTimer(SArbitrator *pArb, SRpcMsg *pMsg) {
   SHashObj *pHash = taosHashInit(64, taosGetDefaultHashFunction(TSDB_DATA_TYPE_INT), false, HASH_NO_LOCK);
 
-  // collect all vgId/hbSeq of Dnodes
-  arbitratorCollectSArbHbDnodeInfo(pArb, pHash);
-
   size_t keyLen = 0;
-  void   *pIter = taosHashIterate(pHash, NULL);
+  void *pIter = taosHashIterate(pArb->arbDnodeMap, NULL);
   while (pIter) {
     int32_t dnodeId = *(int32_t *)taosHashGetKey(pIter, &keyLen);
-    SArbHbDnodeInfo *pDnodeInfo = pIter;
+    SArbDnode *pArbDnode = pIter;
 
     SVArbHeartBeatReq req = {0};
     req.arbId = pArb->arbId;
     memcpy(req.arbToken, pArb->arbToken, TD_ARB_TOKEN_SIZE);
     req.dnodeId = dnodeId;
-    req.arbSeqArray = pDnodeInfo->array;
+
+    size_t sz = taosArrayGetSize(pArbDnode->groupIds);
+    req.arbSeqArray = taosArrayInit(sz, sizeof(SVArbHeartBeatSeq));
+    for (size_t i=0;i<sz;i++) {
+      // TODO(LSG): finish this
+      // SArbitratorGroup arb
+      // int32_t vgId = taosArrayGet(pArbDnode->groupIds, i);
+      // taosArrayPush(req.arbSeqArray, );
+    }
+
     int32_t contLen = tSerializeSVArbHeartBeatReq(NULL, 0, &req);
     void   *pHead = rpcMallocCont(contLen);
     tSerializeSVArbHeartBeatReq(pHead, contLen, &req);
@@ -100,7 +102,7 @@ static int32_t arbitratorProcessArbHeartBeatTimer(SArbitrator *pArb, SRpcMsg *pM
     SRpcMsg rpcMsg = {.pCont = pHead, .contLen = contLen, .msgType = TDMT_VND_ARB_HEARTBEAT};
 
     SEpSet epset = {.inUse = 0, .numOfEps = 1};
-    addEpIntoEpSet(&epset, pDnodeInfo->fqdn, pDnodeInfo->port);
+    addEpIntoEpSet(&epset, pArbDnode->fqdn, pArbDnode->port);
     pArb->msgCb.sendReqFp(&epset, &rpcMsg);
 
     tFreeSVArbHeartBeatReq(&req);

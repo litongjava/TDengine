@@ -474,7 +474,7 @@ static int32_t mndProcessGetArbitratorsReq(SRpcMsg *pReq) {
   }
 
   getRsp.dnodeId = getReq.dnodeId;
-  getRsp.arbVgroups = taosArrayInit(4, sizeof(SArbitratorGroups));
+  getRsp.arbGroups = taosArrayInit(4, sizeof(SArbitratorGroups));
 
   void *pIter = NULL;
   while (1) {
@@ -486,34 +486,34 @@ static int32_t mndProcessGetArbitratorsReq(SRpcMsg *pReq) {
       continue;
     }
 
-    SArbitratorGroups arbVgroup = {0};
-    arbVgroup.arbId = pArb->id;
-    arbVgroup.vgroups = taosArrayInit(4, sizeof(SArbitratorGroupInfo));
+    SArbitratorGroups arbGroup = {0};
+    arbGroup.arbId = pArb->id;
+    arbGroup.groups = taosArrayInit(4, sizeof(SArbitratorGroupInfo));
 
-    int32_t vgNum = taosArrayGetSize(pArb->vgIds);
+    int32_t vgNum = taosArrayGetSize(pArb->groupIds);
     for (int32_t i = 0; i < vgNum; i++) {
-      int32_t *vgId = taosArrayGet(pArb->vgIds, i);
-      SVgObj  *pVgObj = mndAcquireVgroup(pMnode, *vgId);
+      int32_t *groupId = taosArrayGet(pArb->groupIds, i);
+      SVgObj  *pVgObj = mndAcquireVgroup(pMnode, *groupId);
 
-      SArbitratorGroupInfo vgInfo = {0};
-      vgInfo.vgId = *vgId;
-      vgInfo.replica = pVgObj->replica;
+      SArbitratorGroupInfo groupInfo = {0};
+      groupInfo.groupId = *groupId;
+      groupInfo.replica = pVgObj->replica;
       for (int32_t j = 0; j < pVgObj->replica; j++) {
-        SReplica *pReplica = &vgInfo.replicas[j];
+        SReplica *pReplica = &groupInfo.replicas[j];
 
-        SVnodeGid *pVgid = &pVgObj->vnodeGid[j];
-        SDnodeObj *pVgidDnode = mndAcquireDnode(pMnode, pVgid->dnodeId);
-        if (pVgidDnode == NULL) return -1;  // TODO(LSG): RELEASE
+        SVnodeGid *pGroupId = &pVgObj->vnodeGid[j];
+        SDnodeObj *pGroupIdDnode = mndAcquireDnode(pMnode, pGroupId->dnodeId);
+        if (pGroupIdDnode == NULL) return -1;  // TODO(LSG): RELEASE
 
-        pReplica->id = pVgidDnode->id;
-        pReplica->port = pVgidDnode->port;
-        memcpy(pReplica->fqdn, pVgidDnode->fqdn, TSDB_FQDN_LEN);
-        mndReleaseDnode(pMnode, pVgidDnode);
+        pReplica->id = pGroupIdDnode->id;
+        pReplica->port = pGroupIdDnode->port;
+        memcpy(pReplica->fqdn, pGroupIdDnode->fqdn, TSDB_FQDN_LEN);
+        mndReleaseDnode(pMnode, pGroupIdDnode);
       }
-      taosArrayPush(arbVgroup.vgroups, &vgInfo);
+      taosArrayPush(arbGroup.groups, &groupInfo);
       mndReleaseVgroup(pMnode, pVgObj);
     }
-    taosArrayPush(getRsp.arbVgroups, &arbVgroup);
+    taosArrayPush(getRsp.arbGroups, &arbGroup);
   }
 
   int32_t contLen = tSerializeSMGetArbitratorsRsp(NULL, 0, &getRsp);
