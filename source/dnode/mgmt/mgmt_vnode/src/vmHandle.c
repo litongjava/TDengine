@@ -787,26 +787,26 @@ int32_t vmProcessArbHeartBeatReq(SVnodeMgmt *pMgmt, SRpcMsg *pMsg) {
 
   SVArbHeartBeatRsp arbHbRsp = {0};
   arbHbRsp.arbId = arbHbReq.arbId;
-  memcpy(arbHbRsp.arbToken, arbHbReq.arbToken,TD_ARB_TOKEN_SIZE );
+  memcpy(arbHbRsp.arbToken, arbHbReq.arbToken, TD_ARB_TOKEN_SIZE);
   arbHbRsp.dnodeId = pMgmt->pData->dnodeId;
-  arbHbRsp.arbSeqTokenArray = taosArrayInit(arraySize, sizeof(SVArbHeartBeatSeqToken));
+  arbHbRsp.hbMembers = taosArrayInit(arraySize, sizeof(SVArbHbMember));
 
   for (size_t i = 0; i < arraySize; i++) {
-    SVArbHeartBeatSeqToken hbToken = {0};
+    SVArbHbMember      hbMember = {0};
     SVArbHeartBeatSeq *pHbSeq = taosArrayGet(arbHbReq.arbSeqArray, i);
-    SVnodeObj *pVnode = vmAcquireVnodeImpl(pMgmt, pHbSeq->vgId, false);
+    SVnodeObj         *pVnode = vmAcquireVnodeImpl(pMgmt, pHbSeq->groupId, false);
     if (pVnode == NULL) {
       // handle
-      dInfo("vgId:%d, failed to drop since %s", pHbSeq->vgId, terrstr());
+      dInfo("vgId:%d, failed to drop since %s", pHbSeq->groupId, terrstr());
       terrno = TSDB_CODE_VND_NOT_EXIST;
       return -1;
     }
 
-    hbToken.vgId =pHbSeq->vgId;
-    hbToken.seqNo = pHbSeq->seqNo;
-    memcpy(hbToken.arbToken, pVnode->arbToken, TD_ARB_TOKEN_SIZE);
+    hbMember.groupId = pHbSeq->groupId;
+    hbMember.seqNo = pHbSeq->seqNo;
+    memcpy(hbMember.memberToken, pVnode->arbToken, TD_ARB_TOKEN_SIZE);
 
-    taosArrayPush(arbHbRsp.arbSeqTokenArray, &hbToken);
+    taosArrayPush(arbHbRsp.hbMembers, &hbMember);
 
     vmReleaseVnode(pMgmt, pVnode);
   }
@@ -814,7 +814,7 @@ int32_t vmProcessArbHeartBeatReq(SVnodeMgmt *pMgmt, SRpcMsg *pMsg) {
   SRpcMsg rspMsg = {.info = pMsg->info};
   int32_t rspLen = tSerializeSVArbHeartBeatRsp(NULL, 0, &arbHbRsp);
   if (rspLen < 0) {
-    terrno= TSDB_CODE_OUT_OF_MEMORY;
+    terrno = TSDB_CODE_OUT_OF_MEMORY;
     goto _OVER;
   }
 

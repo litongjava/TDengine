@@ -88,7 +88,7 @@ static SSdbRaw *mndArbitratorActionEncode(SArbObj *pObj) {
   SDB_SET_INT64(pRaw, dataPos, pObj->updateTime, _OVER)
   SDB_SET_INT32(pRaw, dataPos, pObj->numOfVgroups, _OVER)
   for (int i = 0; i < pObj->numOfVgroups; i++) {
-    int32_t *vgId = taosArrayGet(pObj->vgIds, i);
+    int32_t *vgId = taosArrayGet(pObj->groupIds, i);
     SDB_SET_INT32(pRaw, dataPos, *vgId, _OVER)
   }
   SDB_SET_RESERVE(pRaw, dataPos, ARBITRATOR_RESERVE_SIZE, _OVER)
@@ -130,13 +130,13 @@ static SSdbRow *mndArbitratorActionDecode(SSdbRaw *pRaw) {
   SDB_GET_INT64(pRaw, dataPos, &pObj->createdTime, _OVER)
   SDB_GET_INT64(pRaw, dataPos, &pObj->updateTime, _OVER)
   SDB_GET_INT32(pRaw, dataPos, &pObj->numOfVgroups, _OVER)
-  pObj->vgIds = taosArrayInit(pObj->numOfVgroups, sizeof(int32_t));
+  pObj->groupIds = taosArrayInit(pObj->numOfVgroups, sizeof(int32_t));
   if (pObj->numOfVgroups > 0) {
-    if (pObj->vgIds == NULL) goto _OVER;
+    if (pObj->groupIds == NULL) goto _OVER;
     for (int i = 0; i < pObj->numOfVgroups; i++) {
       int32_t vgId = -1;
       SDB_GET_INT32(pRaw, dataPos, &vgId, _OVER)
-      if (taosArrayPush(pObj->vgIds, &vgId) == NULL) goto _OVER;
+      if (taosArrayPush(pObj->groupIds, &vgId) == NULL) goto _OVER;
     }
   }
   SDB_GET_RESERVE(pRaw, dataPos, ARBITRATOR_RESERVE_SIZE, _OVER)
@@ -270,7 +270,7 @@ static int32_t mndCreateArbitrator(SMnode *pMnode, SRpcMsg *pReq, SDnodeObj *pDn
   arbObj.createdTime = taosGetTimestampMs();
   arbObj.updateTime = arbObj.createdTime;
   arbObj.numOfVgroups = 0;
-  arbObj.vgIds = taosArrayInit(16, sizeof(int32_t));
+  arbObj.groupIds = taosArrayInit(16, sizeof(int32_t));
 
   STrans *pTrans = mndTransCreate(pMnode, TRN_POLICY_ROLLBACK, TRN_CONFLICT_NOTHING, pReq, "create-arbitrator");
   if (pTrans == NULL) goto _OVER;
@@ -569,7 +569,7 @@ static int32_t mndRetrieveArbitrators(SRpcMsg *pReq, SShowObj *pShow, SSDataBloc
     char vgroupIds[128 + VARSTR_HEADER_SIZE] = {0};
     int  size = 0;
     for (int i = 0; i < pObj->numOfVgroups; i++) {
-      int32_t *vgId = taosArrayGet(pObj->vgIds, i);
+      int32_t *vgId = taosArrayGet(pObj->groupIds, i);
       size += sprintf(vgroupIds + VARSTR_HEADER_SIZE + size, "%d,", *vgId);
     }
     varDataSetLen(vgroupIds, size);

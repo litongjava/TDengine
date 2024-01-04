@@ -157,29 +157,27 @@ int32_t arbmProcessGetAribtratorsRsp(SArbitratorMgmt *pMgmt, SRpcMsg *pRsp) {
     goto _OVER;
   }
 
-  size_t arbVgNum = taosArrayGetSize(getRsp.arbVgroups);
-  for (int32_t i = 0; i < arbVgNum; i++) {
-    SArbitratorGroups *pArbVg = taosArrayGet(getRsp.arbVgroups, i);
-    SArbitratorObj     *pArbObj = arbmAcquireArbitrator(pMgmt, pArbVg->arbId);
+  size_t arbGroupNum = taosArrayGetSize(getRsp.arbGroups);
+  for (int32_t i = 0; i < arbGroupNum; i++) {
+    SArbSetGroupsReq *pArbSetGroupsReq = taosArrayGet(getRsp.arbGroups, i);
+    SArbitratorObj   *pArbObj = arbmAcquireArbitrator(pMgmt, pArbSetGroupsReq->arbId);
     if (pArbObj == NULL) {
-      dInfo("failed to process get-arbitrators rsp, arbitrator:%d not exist", pArbVg->arbId);
+      dInfo("failed to process get-arbitrators rsp, arbitrator:%d not exist", pArbSetGroupsReq->arbId);
       goto _OVER;
     }
 
-    int32_t contLen = tSerializeSArbSetGroupsReq(NULL, 0, pArbVg);
+    int32_t contLen = tSerializeSArbSetGroupsReq(NULL, 0, pArbSetGroupsReq);
     void   *pHead = rpcMallocCont(contLen);
     if (pRsp == NULL) {
       terrno = TSDB_CODE_OUT_OF_MEMORY;
       goto _OVER;
     }
 
-    tSerializeSArbSetGroupsReq(pHead, contLen, pArbVg);
+    tSerializeSArbSetGroupsReq(pHead, contLen, pArbSetGroupsReq);
 
     SRpcMsg rpcMsg = {.pCont = pHead,
                       .contLen = contLen,
                       .msgType = TDMT_ARB_SET_VGROUPS,
-                      .info.ahandle = (void *)0x9527,
-                      .info.refId = 0,
                       .info.noResp = 1};
 
     arbmPutNodeMsgToArbQueue(pArbObj, &rpcMsg);

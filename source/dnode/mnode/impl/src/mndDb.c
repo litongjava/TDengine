@@ -688,7 +688,7 @@ static int32_t mndCreateDb(SMnode *pMnode, SRpcMsg *pReq, SCreateDbReq *pCreate,
       pArbObj = mndAcquireArbitrator(pMnode, pVgroups[i].arbId);
       pArbObj->updateTime = taosGetTimestampMs();
       pArbObj->numOfVgroups++;
-      if (taosArrayPush(pArbObj->vgIds, &pVgroups[i].vgId) == NULL) goto _OVER;
+      if (taosArrayPush(pArbObj->groupIds, &pVgroups[i].vgId) == NULL) goto _OVER;
 
       if (mndSetCreateArbitratorCommitLogs(pTrans, pArbObj) != 0) goto _OVER;
 

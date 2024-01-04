@@ -70,7 +70,7 @@ typedef struct {
 typedef struct {
   int32_t port;
   char    fqdn[TSDB_FQDN_LEN];
-  SArray *groupIds;
+  SArray *groupIds;  // groupId;
 } SArbDnode;
 
 /* --------------------- SArbitrator --------------------- */

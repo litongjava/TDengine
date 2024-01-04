@@ -2117,7 +2117,7 @@ int32_t tSerializeSArbTimerReq(void* buf, int32_t bufLen, SArbTimerReq* pReq);
 int32_t tDeserializeSArbTimerReq(void* buf, int32_t bufLen, SArbTimerReq* pReq);
 
 typedef struct {
-  int32_t vgId;
+  int32_t groupId;
   int32_t seqNo;
 } SVArbHeartBeatSeq;
 
@@ -2133,16 +2133,16 @@ int32_t tDeserializeSVArbHeartBeatReq(void* buf, int32_t bufLen, SVArbHeartBeatR
 void    tFreeSVArbHeartBeatReq(SVArbHeartBeatReq* pReq);
 
 typedef struct {
-  int32_t vgId;
+  int32_t groupId;
   int32_t seqNo;
-  char    arbToken[TD_ARB_TOKEN_SIZE];
-} SVArbHeartBeatSeqToken;
+  char    memberToken[TD_ARB_TOKEN_SIZE];
+} SVArbHbMember;
 
 typedef struct {
   int32_t arbId;
   char    arbToken[TD_ARB_TOKEN_SIZE];
   int32_t dnodeId;
-  SArray* arbSeqTokenArray; // SVArbHeartBeatSeqToken
+  SArray* hbMembers; // SVArbHbMember
 } SVArbHeartBeatRsp;
 
 int32_t tSerializeSVArbHeartBeatRsp(void* buf, int32_t bufLen, SVArbHeartBeatRsp* pReq);

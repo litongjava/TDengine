@@ -16,12 +16,11 @@
 #include "arbInt.h"
 #include "arbitrator.h"
 
-static void      arbitratorGenerateArbToken(int32_t arbId, char *buf);
+static void arbitratorGenerateArbToken(int32_t arbId, char *buf);
 
-static int arbitratorEncodeDiskData(const SArbitratorDiskDate *pData, char **ppData) {
+static int arbitratorEncodeDiskData(const SArbitratorDiskDate *pDiskData, char **ppData) {
   SJson *pJson;
   char  *pData;
-
   *ppData = NULL;
 
   pJson = tjsonCreateObject();
@@ -29,19 +28,19 @@ static int arbitratorEncodeDiskData(const SArbitratorDiskDate *pData, char **ppD
     return -1;
   }
 
-  if (tjsonAddIntegerToObject(pJson, "arbId", pData->arbId) < 0) goto _err;
+  if (tjsonAddIntegerToObject(pJson, "arbId", pDiskData->arbId) < 0) goto _err;
 
   SJson *jGroups = tjsonCreateArray();
   if (jGroups == NULL) goto _err;
   if (tjsonAddItemToObject(pJson, "groups", jGroups) < 0) goto _err;
 
-  void *iter = taosHashIterate(pData->arbGroupMap, NULL);
+  void *iter = taosHashIterate(pDiskData->arbGroupMap, NULL);
   while (iter != NULL) {
     SJson *jGroup = tjsonCreateObject();
     if (jGroup == NULL) goto _err;
     if (tjsonAddItemToArray(jGroups, jGroup) < 0) goto _err;
     SArbGroup *pGroup = iter;
-    int32_t    keyLen = 0;
+    size_t    keyLen = 0;
     int32_t   *pGroupId = taosHashGetKey(iter, &keyLen);
     if (tjsonAddIntegerToObject(jGroup, "groupId", *pGroupId) < 0) goto _err;
     SJson *jMembers = tjsonCreateArray();
@@ -104,7 +103,7 @@ static int arbitratorDecodeDiskData(uint8_t *pData, SArbitratorDiskDate *pDate) 
     }
     SJson *jAssignedLeader = tjsonGetObjectItem(jGroup, "assignedLeader");
     if (tjsonGetIntValue(jAssignedLeader, "dnodeId", &arbGroup.assignedLeader.dnodeId) < 0) goto _err;
-    if (tjsonGetStringValue(jAssignedLeader, "token", &arbGroup.assignedLeader.token) < 0) goto _err;
+    if (tjsonGetStringValue(jAssignedLeader, "token", arbGroup.assignedLeader.token) < 0) goto _err;
 
     {  // init other values
       arbGroup.isSync = false;
@@ -253,7 +252,7 @@ int32_t arbitratorUpdateDiskData(const char *dir, SArbitratorDiskDate *pData) {
 
 int32_t arbitratorCreate(const char *path, int32_t arbId) {
   SArbitratorDiskDate diskData = {0};
-  char            dir[TSDB_FILENAME_LEN] = {0};
+  char                dir[TSDB_FILENAME_LEN] = {0};
 
   // create arbitrator env
   if (taosMkDir(path)) {
