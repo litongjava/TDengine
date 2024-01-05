@@ -55,9 +55,10 @@ static int arbitratorEncodeDiskData(const SArbitratorDiskDate *pDiskData, char *
     }
     SJson *jAssignedLeader = tjsonCreateObject();
     if (jAssignedLeader == NULL) goto _err;
-    if (tjsonAddItemToObject(jAssignedLeader, "assignedLeader", jGroup) < 0) goto _err;
+    if (tjsonAddItemToObject(jGroup, "assignedLeader", jAssignedLeader) < 0) goto _err;
     if (tjsonAddIntegerToObject(jAssignedLeader, "dnodeId", pGroup->assignedLeader.dnodeId) < 0) goto _err;
     if (tjsonAddStringToObject(jAssignedLeader, "token", pGroup->assignedLeader.token) < 0) goto _err;
+    iter = taosHashIterate(pDiskData->arbGroupMap, iter);
   }
 
   pData = tjsonToString(pJson);
@@ -71,6 +72,7 @@ static int arbitratorEncodeDiskData(const SArbitratorDiskDate *pDiskData, char *
   return 0;
 
 _err:
+  taosHashCancelIterate(pDiskData->arbGroupMap, iter);
   tjsonDelete(pJson);
   return -1;
 }

@@ -68,9 +68,9 @@ typedef struct {
 
 /* --------------------- SArbDnode --------------------- */
 typedef struct {
-  int32_t port;
-  char    fqdn[TSDB_FQDN_LEN];
-  SArray *groupIds;  // groupId;
+  int32_t   port;
+  char      fqdn[TSDB_FQDN_LEN];
+  SHashObj *groupIds;  // groupId;
 } SArbDnode;
 
 /* --------------------- SArbitrator --------------------- */
@@ -82,6 +82,8 @@ struct SArbitrator {
   SMsgCb          msgCb;
   char            path[];
 };
+
+int32_t arbitratorUpdateDiskData(const char *dir, SArbitratorDiskDate *pData);
 
 #ifdef __cplusplus
 }

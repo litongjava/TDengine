@@ -87,9 +87,11 @@ static SSdbRaw *mndArbitratorActionEncode(SArbObj *pObj) {
   SDB_SET_INT64(pRaw, dataPos, pObj->createdTime, _OVER)
   SDB_SET_INT64(pRaw, dataPos, pObj->updateTime, _OVER)
   SDB_SET_INT32(pRaw, dataPos, pObj->numOfVgroups, _OVER)
-  for (int i = 0; i < pObj->numOfVgroups; i++) {
-    int32_t *vgId = taosArrayGet(pObj->groupIds, i);
+  void *iter = taosHashIterate(pObj->groupIds, NULL);
+  while(iter) {
+    int32_t *vgId = iter;
     SDB_SET_INT32(pRaw, dataPos, *vgId, _OVER)
+    iter = taosHashIterate(pObj->groupIds, iter);
   }
   SDB_SET_RESERVE(pRaw, dataPos, ARBITRATOR_RESERVE_SIZE, _OVER)
 
@@ -130,13 +132,13 @@ static SSdbRow *mndArbitratorActionDecode(SSdbRaw *pRaw) {
   SDB_GET_INT64(pRaw, dataPos, &pObj->createdTime, _OVER)
   SDB_GET_INT64(pRaw, dataPos, &pObj->updateTime, _OVER)
   SDB_GET_INT32(pRaw, dataPos, &pObj->numOfVgroups, _OVER)
-  pObj->groupIds = taosArrayInit(pObj->numOfVgroups, sizeof(int32_t));
+  pObj->groupIds = taosHashInit(16, taosGetDefaultHashFunction(TSDB_DATA_TYPE_INT), false, HASH_NO_LOCK);
   if (pObj->numOfVgroups > 0) {
     if (pObj->groupIds == NULL) goto _OVER;
     for (int i = 0; i < pObj->numOfVgroups; i++) {
       int32_t vgId = -1;
       SDB_GET_INT32(pRaw, dataPos, &vgId, _OVER)
-      if (taosArrayPush(pObj->groupIds, &vgId) == NULL) goto _OVER;
+      if (taosHashPut(pObj->groupIds, &vgId, sizeof(int32_t), NULL, 0) != 0) goto _OVER;
     }
   }
   SDB_GET_RESERVE(pRaw, dataPos, ARBITRATOR_RESERVE_SIZE, _OVER)
@@ -179,6 +181,10 @@ static int32_t mndArbitratorActionDelete(SSdb *pSdb, SArbObj *pObj) {
 static int32_t mndArbitratorActionUpdate(SSdb *pSdb, SArbObj *pOld, SArbObj *pNew) {
   mTrace("arbitrator:%d, perform update action, old row:%p new row:%p", pOld->id, pOld, pNew);
   pOld->updateTime = pNew->updateTime;
+  pOld->updateTime = pNew->numOfVgroups;
+  SHashObj *tmp = pOld->groupIds;
+  pOld->groupIds = pNew->groupIds;
+  pNew->groupIds = tmp;
   return 0;
 }
 
@@ -270,7 +276,7 @@ static int32_t mndCreateArbitrator(SMnode *pMnode, SRpcMsg *pReq, SDnodeObj *pDn
   arbObj.createdTime = taosGetTimestampMs();
   arbObj.updateTime = arbObj.createdTime;
   arbObj.numOfVgroups = 0;
-  arbObj.groupIds = taosArrayInit(16, sizeof(int32_t));
+  arbObj.groupIds = taosHashInit(16, taosGetDefaultHashFunction(TSDB_DATA_TYPE_INT), false, HASH_NO_LOCK);
 
   STrans *pTrans = mndTransCreate(pMnode, TRN_POLICY_ROLLBACK, TRN_CONFLICT_NOTHING, pReq, "create-arbitrator");
   if (pTrans == NULL) goto _OVER;
@@ -452,6 +458,97 @@ _OVER:
   mndReleaseArbitrator(pMnode, pObj);
   tFreeSDDropQnodeReq(&dropReq);
   return code;
+}
+
+static void *mndBuildRegisterVgToArbitratorReq(SMnode *pMnode, SDnodeObj *pDnode, int32_t arbId, SVgObj *pVgroup,
+                                               int32_t *pContLen) {
+  SArbitratorGroupInfo info = {0};
+  info.groupId = pVgroup->vgId;
+  info.replica = pVgroup->replica;
+  for (int8_t i = 0; i < pVgroup->replica; i++) {
+    info.dnodeIds[i] = pVgroup->vnodeGid[i].dnodeId;
+  }
+
+  SArbRegisterGroupReq registerReq = {0};
+  registerReq.arbId = arbId;
+  registerReq.groups = taosArrayInit(1, sizeof(SArbitratorGroupInfo));
+  taosArrayPush(registerReq.groups, &info);
+
+  int32_t contLen = tSerializeSArbitratorGroups(NULL, 0, &registerReq);
+  if (contLen < 0) {
+    terrno = TSDB_CODE_OUT_OF_MEMORY;
+    return NULL;
+  }
+
+  void *pReq = taosMemoryMalloc(contLen);
+  if (pReq == NULL) {
+    terrno = TSDB_CODE_OUT_OF_MEMORY;
+    return NULL;
+  }
+
+  tSerializeSArbitratorGroups(pReq, contLen, &registerReq);
+  *pContLen = contLen;
+  return pReq;
+}
+
+int32_t mndAddRegisterVgToArbitratorAction(SMnode *pMnode, STrans *pTrans, SVgObj *pVgroup, bool registerVg) {
+  SArbObj *pArbObj = mndAcquireArbitrator(pMnode, pVgroup->arbId);
+  if (!pArbObj) return -1;
+
+  STransAction action = {0};
+
+  SDnodeObj *pDnode = mndAcquireDnode(pMnode, pArbObj->pDnode->id);
+  if (pDnode == NULL) return -1;
+  action.epSet = mndGetDnodeEpset(pDnode);
+  mndReleaseDnode(pMnode, pDnode);
+
+  int32_t contLen = 0;
+  void   *pReq = mndBuildRegisterVgToArbitratorReq(pMnode, pDnode, pVgroup->arbId, pVgroup, &contLen);
+  if (pReq == NULL) return -1;
+
+  action.pCont = pReq;
+  action.contLen = contLen;
+  action.msgType = registerVg ? TDMT_ARB_REGISTER_GROUPS : TDMT_ARB_UNREGISTER_GROUPS;
+  action.acceptableCode = TSDB_CODE_ARB_GROUP_ALREADY_EXIST;
+
+  if (mndTransAppendRedoAction(pTrans, &action) != 0) {
+    taosMemoryFree(pReq);
+    return -1;
+  }
+
+  return 0;
+}
+
+int32_t mndSetUpdateArbitratorCommitLogs(SMnode *pMnode, STrans *pTrans, SVgObj *pVgroup, bool registerVg) {
+  SArbObj *pArbObj = mndAcquireArbitrator(pMnode, pVgroup->arbId);
+  if (!pArbObj) return -1;
+
+  SArbObj arbObj = {0};
+  arbObj.id = pArbObj->id;
+  arbObj.createdTime = pArbObj->createdTime;
+  arbObj.updateTime = taosGetTimestampMs();
+  arbObj.numOfVgroups = pArbObj->numOfVgroups;
+  arbObj.groupIds = taosHashInit(16, taosGetDefaultHashFunction(TSDB_DATA_TYPE_INT), false, HASH_NO_LOCK);
+
+  void *iter = taosHashIterate(pArbObj->groupIds, NULL);
+  while (iter){
+    int32_t *pGroupId = iter;
+    taosHashPut(arbObj.groupIds, pGroupId, sizeof(int32_t), NULL, 0);
+    iter = taosHashIterate(pArbObj->groupIds, iter);
+  }
+
+  if (registerVg) {
+    taosHashPut(arbObj.groupIds, &pVgroup->vgId, sizeof(int32_t), NULL, 0);
+  } else {
+    taosHashRemove(arbObj.groupIds, pVgroup->vgId, sizeof(int32_t));
+  }
+
+  SSdbRaw *pCommitRaw = mndArbitratorActionEncode(&arbObj);
+  if (pCommitRaw == NULL) return -1;
+  if (mndTransAppendCommitlog(pTrans, pCommitRaw) != 0) return -1;
+  if (sdbSetRawStatus(pCommitRaw, SDB_STATUS_READY) != 0) return -1;
+
+  return 0;
 }
 
 static int32_t mndProcessGetArbitratorsReq(SRpcMsg *pReq) {

@@ -254,7 +254,7 @@ typedef struct {
   int64_t    createdTime;
   int64_t    updateTime;
   int32_t    numOfVgroups;
-  SArray*    groupIds; // int32_t
+  SHashObj*  groupIds;  // int32_t
   SDnodeObj* pDnode;
 } SArbObj;
 

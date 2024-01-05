@@ -522,6 +522,10 @@ static int32_t mndSetCreateDbUndoLogs(SMnode *pMnode, STrans *pTrans, SDbObj *pD
     if (pVgRaw == NULL) return -1;
     if (mndTransAppendUndolog(pTrans, pVgRaw) != 0) return -1;
     if (sdbSetRawStatus(pVgRaw, SDB_STATUS_DROPPED) != 0) return -1;
+
+    if (pDb->cfg.withArbitrator) {
+      if (mndSetUpdateArbitratorCommitLogs(pMnode, pTrans, pVgroups + v, false) != 0) return -1;
+    }
   }
 
   return 0;
@@ -539,6 +543,10 @@ static int32_t mndSetCreateDbCommitLogs(SMnode *pMnode, STrans *pTrans, SDbObj *
     if (pVgRaw == NULL) return -1;
     if (mndTransAppendCommitlog(pTrans, pVgRaw) != 0) return -1;
     if (sdbSetRawStatus(pVgRaw, SDB_STATUS_READY) != 0) return -1;
+
+    if (pDb->cfg.withArbitrator) {
+      if (mndSetUpdateArbitratorCommitLogs(pMnode, pTrans, pVgroups + v, true) != 0) return -1;
+    }
   }
 
   if (pUserDuped) {
@@ -561,6 +569,9 @@ static int32_t mndSetCreateDbRedoActions(SMnode *pMnode, STrans *pTrans, SDbObj 
         return -1;
       }
     }
+    if (mndAddRegisterVgToArbitratorAction(pMnode, pTrans, pVgroup, true) != 0) {
+      return -1;
+    }
   }
 
   return 0;
@@ -575,6 +586,9 @@ static int32_t mndSetCreateDbUndoActions(SMnode *pMnode, STrans *pTrans, SDbObj 
       if (mndAddDropVnodeAction(pMnode, pTrans, pDb, pVgroup, pVgid, false) != 0) {
         return -1;
       }
+    }
+    if (mndAddRegisterVgToArbitratorAction(pMnode, pTrans, pVgroup, false) != 0) {
+      return -1;
     }
   }
 
@@ -686,8 +700,11 @@ static int32_t mndCreateDb(SMnode *pMnode, SRpcMsg *pReq, SCreateDbReq *pCreate,
   if (dbObj.cfg.withArbitrator) {
     for (int i = 0; i < dbObj.cfg.numOfVgroups; i++) {
       pArbObj = mndAcquireArbitrator(pMnode, pVgroups[i].arbId);
-      pArbObj->updateTime = taosGetTimestampMs();
-      pArbObj->numOfVgroups++;
+      SArbObj  arbObj = {0};
+      arbObj.id = -1; // for test
+      arbObj.updateTime = taosGetTimestampMs();
+      arbObj.numOfVgroups = pArbObj->numOfVgroups + 1;
+      arbObj.groupIds = taosArrayDup(pArbObj->groupIds, NULL);
       if (taosArrayPush(pArbObj->groupIds, &pVgroups[i].vgId) == NULL) goto _OVER;
 
       if (mndSetCreateArbitratorCommitLogs(pTrans, pArbObj) != 0) goto _OVER;
@@ -702,7 +719,6 @@ static int32_t mndCreateDb(SMnode *pMnode, SRpcMsg *pReq, SCreateDbReq *pCreate,
   code = 0;
 
 _OVER:
-  mndReleaseArbitrator(pMnode, pArbObj);
   taosMemoryFree(pVgroups);
   mndUserFreeObj(&newUserObj);
   mndTransDrop(pTrans);

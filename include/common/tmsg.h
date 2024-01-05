@@ -2089,13 +2089,13 @@ int32_t tDeserializeSMGetArbitratorsReq(void* buf, int32_t bufLen, SMGetArbitrat
 typedef struct {
   int32_t  groupId;
   int8_t   replica;
-  SReplica replicas[TSDB_MAX_REPLICA];
+  int32_t  dnodeIds[TSDB_MAX_REPLICA];
 } SArbitratorGroupInfo;
 
 typedef struct {
-  int32_t arbId;
-  SArray* groups; // SArbitratorGroupInfo
-} SArbitratorGroups, SArbSetGroupsReq;
+  int32_t      arbId;
+  SArray*      groups;  // SArbitratorGroupInfo
+} SArbitratorGroups, SArbRegisterGroupReq, SArbUnregisterGroupReq;
 
 typedef struct {
   int32_t dnodeId;
@@ -2106,8 +2106,8 @@ int32_t tSerializeSMGetArbitratorsRsp(void* buf, int32_t bufLen, SMGetArbitrator
 int32_t tDeserializeSMGetArbitratorsRsp(void* buf, int32_t bufLen, SMGetArbitratorsRsp* pRsp);
 void    tFreeSMGetArbitratorsRsp(SMGetArbitratorsRsp* pRsp);
 
-int32_t tSerializeSArbSetGroupsReq(void* buf, int32_t bufLen, SArbSetGroupsReq* pReq);
-int32_t tDeserializeSArbSetGroupsReq(void* buf, int32_t bufLen, SArbSetGroupsReq* pReq);
+int32_t tSerializeSArbitratorGroups(void* buf, int32_t bufLen, SArbitratorGroups* pReq);
+int32_t tDeserializeSArbitratorGroups(void* buf, int32_t bufLen, SArbitratorGroups* pReq);
 
 typedef struct {
   int32_t reserved;
