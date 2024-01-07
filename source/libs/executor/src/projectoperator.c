@@ -800,6 +800,11 @@ int32_t projectApplyFunctions(SExprInfo* pExpr, SSDataBlock* pResult, SSDataBloc
       SColumnInfoData  idata = {.info = pResColData->info, .hasNull = true};
 
       SScalarParam dest = {.columnData = &idata};
+      // For last(expr) last row scan, not support for the time being
+      if (QUERY_NODE_OPERATOR == nodeType(pExpr[k].pExpr->_optrRoot.pRootNode) &&
+          FUNCTION_TYPE_CACHE_LAST == ((SOperatorNode*)pExpr[k].pExpr->_optrRoot.pRootNode)->node.funcType) {
+        dest.param = &pExpr[k].base.resSchema;
+      }
       int32_t      code = scalarCalculate(pExpr[k].pExpr->_optrRoot.pRootNode, pBlockList, &dest);
       if (code != TSDB_CODE_SUCCESS) {
         taosArrayDestroy(pBlockList);
@@ -813,6 +818,57 @@ int32_t projectApplyFunctions(SExprInfo* pExpr, SSDataBlock* pResult, SSDataBloc
       colDataDestroy(&idata);
 
       numOfRows = dest.numOfRows;
+      // For last(expr) last row scan, not support for the time being
+      if (QUERY_NODE_OPERATOR == nodeType(pExpr[k].pExpr->_optrRoot.pRootNode) &&
+          FUNCTION_TYPE_CACHE_LAST == ((SOperatorNode*)pExpr[k].pExpr->_optrRoot.pRootNode)->node.funcType) {
+        SOperatorNode* pOptNode = (SOperatorNode*)pExpr[k].pExpr->_optrRoot.pRootNode;
+
+        void* pBuf = taosMemoryCalloc(1, sizeof(SFirstLastRes) + pResColData->info.bytes + VARSTR_HEADER_SIZE);
+        SFirstLastRes* pLastRes = (SFirstLastRes*)varDataVal(pBuf);
+        pLastRes->hasResult = true;
+	      pLastRes->isNull = false;
+        SColumnNode* pColNode = NULL;
+        if (pOptNode->pLeft != NULL && QUERY_NODE_COLUMN == nodeType(pOptNode->pLeft)) {
+          pColNode = (SColumnNode*)pOptNode->pLeft;
+        } else if (pOptNode->pRight != NULL && QUERY_NODE_COLUMN == nodeType(pOptNode->pRight)) {
+          pColNode = (SColumnNode*)pOptNode->pRight;
+        }
+        if(pColNode == NULL) {
+          return TSDB_CODE_QRY_INVALID_INPUT;
+        }
+        int index = taosArrayGetSize(pBlockList);
+        for (int32_t i = 0; i < taosArrayGetSize(pBlockList); ++i) {
+          SSDataBlock *pb = taosArrayGetP(pBlockList, i);
+          if (pb->info.id.blockId == pColNode->dataBlockId) {
+            index = i;
+            break;
+          }
+        }
+        if (index >= taosArrayGetSize(pBlockList)) {
+          return TSDB_CODE_QRY_INVALID_INPUT;
+        }
+        SSDataBlock *block = *(SSDataBlock **)taosArrayGet(pBlockList, index);
+        SColumnInfoData *columnData = (SColumnInfoData *)taosArrayGet(block->pDataBlock, pColNode->slotId);
+        SFirstLastRes* pInputInfo = (SFirstLastRes*)varDataVal(colDataGetData(columnData, 0));
+        pLastRes->ts = pInputInfo->ts;
+
+        if (IS_VAR_DATA_TYPE(pResColData->info.type)) {
+          varDataSetLen(pLastRes->buf, pResColData->info.bytes);
+
+          memcpy(varDataVal(pLastRes->buf), pResColData->pData, pResColData->info.bytes);
+          pLastRes->bytes = pResColData->info.bytes + VARSTR_HEADER_SIZE;
+        } else {
+          memcpy(pLastRes->buf, pResColData->pData, pResColData->info.bytes);
+          pLastRes->bytes = pResColData->info.bytes;
+        }
+
+        colDataDestroy(pResColData);
+        pResColData->varmeta.offset = taosMemoryCalloc(1, sizeof(int32_t));
+        pResColData->info.type = TSDB_DATA_TYPE_BINARY;
+        varDataSetLen(pBuf, pResColData->info.bytes + sizeof(SFirstLastRes));
+        pResColData->info.bytes = pResColData->info.bytes + sizeof(SFirstLastRes) + VARSTR_HEADER_SIZE;
+        colDataSetVal(pResColData, 1, (const char*)pBuf, false);
+      }
       taosArrayDestroy(pBlockList);
     } else if (pExpr[k].pExpr->nodeType == QUERY_NODE_FUNCTION) {
       // _rowts/_c0, not tbname column

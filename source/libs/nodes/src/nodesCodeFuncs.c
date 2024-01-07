@@ -3451,6 +3451,7 @@ static int32_t jsonToDataType(const SJson* pJson, void* pObj) {
 static const char* jkExprDataType = "DataType";
 static const char* jkExprAliasName = "AliasName";
 static const char* jkExprUserAlias = "UserAlias";
+static const char* jkExprFuncType = "FuncType";
 
 static int32_t exprNodeToJson(const void* pObj, SJson* pJson) {
   const SExprNode* pNode = (const SExprNode*)pObj;
@@ -3461,6 +3462,9 @@ static int32_t exprNodeToJson(const void* pObj, SJson* pJson) {
   }
   if (TSDB_CODE_SUCCESS == code) {
     code = tjsonAddStringToObject(pJson, jkExprUserAlias, pNode->userAlias);
+  }
+  if (TSDB_CODE_SUCCESS == code) {
+    code = tjsonAddIntegerToObject(pJson, jkExprFuncType, pNode->funcType);
   }
 
   return code;
@@ -3475,6 +3479,9 @@ static int32_t jsonToExprNode(const SJson* pJson, void* pObj) {
   }
   if (TSDB_CODE_SUCCESS == code) {
     code = tjsonGetStringValue(pJson, jkExprUserAlias, pNode->userAlias);
+  }
+  if (TSDB_CODE_SUCCESS == code) {
+    code = tjsonGetIntValue(pJson, jkExprFuncType, &pNode->funcType);
   }
 
   return code;

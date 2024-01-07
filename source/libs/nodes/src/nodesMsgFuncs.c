@@ -660,11 +660,17 @@ static int32_t msgToDataType(STlvDecoder* pDecoder, void* pObj) {
   return code;
 }
 
-enum { EXPR_CODE_RES_TYPE = 1 };
+enum { EXPR_CODE_RES_TYPE = 1, EXPR_CODE_FUNC_TYPE = 2};
 
 static int32_t exprNodeToMsg(const void* pObj, STlvEncoder* pEncoder) {
   const SExprNode* pNode = (const SExprNode*)pObj;
-  return tlvEncodeObj(pEncoder, EXPR_CODE_RES_TYPE, dataTypeToMsg, &pNode->resType);
+  int32_t code = TSDB_CODE_SUCCESS;
+
+  code = tlvEncodeObj(pEncoder, EXPR_CODE_RES_TYPE, dataTypeToMsg, &pNode->resType);
+  if (TSDB_CODE_SUCCESS == code) {
+    code = tlvEncodeI32(pEncoder, EXPR_CODE_FUNC_TYPE, pNode->funcType);
+  }
+  return code;
 }
 
 static int32_t msgToExprNode(STlvDecoder* pDecoder, void* pObj) {
@@ -676,6 +682,9 @@ static int32_t msgToExprNode(STlvDecoder* pDecoder, void* pObj) {
     switch (pTlv->type) {
       case EXPR_CODE_RES_TYPE:
         code = tlvDecodeObjFromTlv(pTlv, msgToDataType, &pNode->resType);
+        break;
+      case EXPR_CODE_FUNC_TYPE:
+        code = tlvDecodeI32(pTlv, &pNode->funcType);
         break;
       default:
         break;
@@ -691,6 +700,9 @@ static int32_t columnNodeInlineToMsg(const void* pObj, STlvEncoder* pEncoder) {
   const SColumnNode* pNode = (const SColumnNode*)pObj;
 
   int32_t code = dataTypeInlineToMsg(&pNode->node.resType, pEncoder);
+  if (TSDB_CODE_SUCCESS == code) {
+    code = tlvEncodeValueI32(pEncoder, pNode->node.funcType);
+  }
   if (TSDB_CODE_SUCCESS == code) {
     code = tlvEncodeValueU64(pEncoder, pNode->tableId);
   }
@@ -733,6 +745,9 @@ static int32_t msgToColumnNodeInline(STlvDecoder* pDecoder, void* pObj) {
   SColumnNode* pNode = (SColumnNode*)pObj;
 
   int32_t code = msgToDataTypeInline(pDecoder, &pNode->node.resType);
+  if (TSDB_CODE_SUCCESS == code) {
+    code = tlvDecodeValueI32(pDecoder, &pNode->node.funcType);
+  }
   if (TSDB_CODE_SUCCESS == code) {
     code = tlvDecodeValueU64(pDecoder, &pNode->tableId);
   }

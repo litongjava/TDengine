@@ -871,8 +871,41 @@ int32_t sclExecOperator(SOperatorNode *node, SScalarCtx *ctx, SScalarParam *outp
   SScalarParam *pLeft = &params[0];
   SScalarParam *pRight = paramNum > 1 ? &params[1] : NULL;
 
+  // For last(expr) last row scan, not support for the time being
+  if (FUNCTION_TYPE_CACHE_LAST == node->node.funcType) {
+    if(NULL == ctx->param) {
+      return TSDB_CODE_QRY_INVALID_INPUT;
+    }
+    SColumnNode* pColNode = NULL;
+    SResSchema* resSchema = (SResSchema*)ctx->param;
+    if (node->pLeft != NULL && QUERY_NODE_COLUMN == nodeType(node->pLeft)) {
+      pColNode = (SColumnNode*)node->pLeft;
+    } else if (node->pRight != NULL && QUERY_NODE_COLUMN == nodeType(node->pRight)) {
+      pColNode = (SColumnNode*)node->pRight;
+    }
+    if(pColNode == NULL) {
+      return TSDB_CODE_QRY_INVALID_INPUT;
+    }
+    SScalarParam *pColParam = NULL;
+    if (pLeft != NULL && TSDB_DATA_TYPE_BINARY == pLeft->columnData->info.type &&
+        pLeft->columnData->info.slotId == pColNode->slotId) {
+      pColParam = pLeft;
+    } else if (pRight != NULL && TSDB_DATA_TYPE_BINARY == pRight->columnData->info.type &&
+        pRight->columnData->info.slotId == pColNode->slotId) {
+      pColParam = pRight;
+    } else {
+      SCL_RET(TSDB_CODE_QRY_JSON_IN_ERROR);
+    }
+    SFirstLastRes* pInputInfo = (SFirstLastRes*)varDataVal(colDataGetData(pColParam->columnData, 0));
+    if (ctx->type.selfType)
+    pColParam->columnData->info.type = resSchema->type;
+    pColParam->columnData->info.bytes = resSchema->bytes;
+    colDataSetInt32(pColParam->columnData, 0, (int32_t*)pInputInfo->buf);
+  }
+
   terrno = TSDB_CODE_SUCCESS;
   OperatorFn(pLeft, pRight, output, TSDB_ORDER_ASC);
+
   code = terrno;
 
 _return:

@@ -13,6 +13,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 #include "cos.h"
+#include "functionMgt.h"
 #include "tsdb.h"
 #include "tsdbDataFileRW.h"
 #include "tsdbReadUtil.h"
@@ -1057,6 +1058,12 @@ int32_t tsdbCacheGetBatch(STsdb *pTsdb, tb_uid_t uid, SArray *pLastArray, SCache
     int16_t cid = ((int16_t *)TARRAY_DATA(pCidList))[i];
 
     SLastKey *key = &(SLastKey){.ltype = ltype, .uid = uid, .cid = cid};
+    // for select last_row, last case
+    int32_t funcType = ((int32_t *)TARRAY_DATA(pr->pFuncTypeList))[i];
+    if (((pr->type & CACHESCAN_RETRIEVE_LAST) == CACHESCAN_RETRIEVE_LAST) && FUNCTION_TYPE_CACHE_LAST_ROW == funcType) {
+      int8_t tempType = CACHESCAN_RETRIEVE_LAST_ROW | (pr->type ^ CACHESCAN_RETRIEVE_LAST);
+      key->ltype = (tempType & CACHESCAN_RETRIEVE_LAST) >> 3;
+    }
 
     LRUHandle *h = taosLRUCacheLookup(pCache, key, ROCKS_KEY_LEN);
     if (h) {

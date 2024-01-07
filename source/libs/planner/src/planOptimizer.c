@@ -2501,17 +2501,30 @@ static bool lastRowScanOptCheckColNum(int32_t lastColNum, col_id_t lastColId,
   return true;
 }
 
-static bool lastRowScanOptCheckFuncList(SLogicNode* pNode, bool* hasOtherFunc) {
+static bool isNeedSplitCacheLastFunc(SFunctionNode* pFunc, SScanLogicNode* pScan) {
+  int32_t funcType = pFunc->funcType;
+  if ((FUNCTION_TYPE_LAST_ROW != funcType || (FUNCTION_TYPE_LAST_ROW == funcType && TSDB_CACHE_MODEL_LAST_VALUE == pScan->cacheLastMode)) &&
+       (FUNCTION_TYPE_LAST != funcType || (FUNCTION_TYPE_LAST == funcType && (TSDB_CACHE_MODEL_LAST_ROW == pScan->cacheLastMode ||
+         QUERY_NODE_OPERATOR == nodeType(nodesListGetNode(pFunc->pParameterList, 0))))) &&
+        FUNCTION_TYPE_SELECT_VALUE != funcType && FUNCTION_TYPE_GROUP_KEY != funcType) {
+    return true;
+  }
+  return false;
+}
+
+static bool lastRowScanOptCheckFuncList(SLogicNode* pNode, int8_t cacheLastModel, bool* hasOtherFunc) {
   bool     hasNonPKSelectFunc = false;
   SNode*   pFunc = NULL;
   int32_t  lastColNum = 0, selectNonPKColNum = 0;
   col_id_t lastColId = -1, selectNonPKColId = -1;
+  SScanLogicNode* pScan = (SScanLogicNode*)nodesListGetNode(((SAggLogicNode*)pNode)->node.pChildren, 0);
+  uint32_t needSplitFuncCount = 0;
   FOREACH(pFunc, ((SAggLogicNode*)pNode)->pAggFuncs) {
     SFunctionNode* pAggFunc = (SFunctionNode*)pFunc;
+    SNode* pParam = nodesListGetNode(pAggFunc->pParameterList, 0);
     if (FUNCTION_TYPE_LAST == pAggFunc->funcType) {
-      SNode* pPar = nodesListGetNode(pAggFunc->pParameterList, 0);
-      if (QUERY_NODE_COLUMN == nodeType(pPar)) {
-        SColumnNode* pCol = (SColumnNode*)pPar;
+      if (QUERY_NODE_COLUMN == nodeType(pParam)) {
+        SColumnNode* pCol = (SColumnNode*)pParam;
         if (pCol->colType != COLUMN_TYPE_COLUMN) {
           return false;
         }
@@ -2520,13 +2533,19 @@ static bool lastRowScanOptCheckFuncList(SLogicNode* pNode, bool* hasOtherFunc) {
           lastColNum++;
         }
       }
-      if (QUERY_NODE_VALUE == nodeType(nodesListGetNode(pAggFunc->pParameterList, 0))) {
+      else if (QUERY_NODE_VALUE == nodeType(pParam)) {
         return false;
       }
-      if (!lastRowScanOptCheckColNum(lastColNum, lastColId, selectNonPKColNum, selectNonPKColId))
+      if (!lastRowScanOptCheckColNum(lastColNum, lastColId, selectNonPKColNum, selectNonPKColId)) {
         return false;
+      }
+      if (QUERY_NODE_OPERATOR == nodeType(pParam)) {
+        *hasOtherFunc = true;
+      }
+      if (TSDB_CACHE_MODEL_LAST_ROW == cacheLastModel) {
+        *hasOtherFunc = true;
+      }
     } else if (FUNCTION_TYPE_SELECT_VALUE == pAggFunc->funcType) {
-      SNode* pParam = nodesListGetNode(pAggFunc->pParameterList, 0);
       if (QUERY_NODE_COLUMN == nodeType(pParam)) {
         SColumnNode* pCol = (SColumnNode*)pParam;
         if (PRIMARYKEY_TIMESTAMP_COL_ID != pCol->colId) {
@@ -2548,7 +2567,15 @@ static bool lastRowScanOptCheckFuncList(SLogicNode* pNode, bool* hasOtherFunc) {
       }
     } else if (FUNCTION_TYPE_LAST_ROW != pAggFunc->funcType) {
       *hasOtherFunc = true;
+    } else if (FUNCTION_TYPE_LAST_ROW == pAggFunc->funcType && TSDB_CACHE_MODEL_LAST_VALUE == cacheLastModel) {
+      *hasOtherFunc = true;
     }
+    if (isNeedSplitCacheLastFunc(pAggFunc, pScan)) {
+      needSplitFuncCount++;
+    }
+  }
+  if (needSplitFuncCount >= ((SAggLogicNode*)pNode)->pAggFuncs->length) {
+    return false;
   }
 
   return true;
@@ -2556,7 +2583,7 @@ static bool lastRowScanOptCheckFuncList(SLogicNode* pNode, bool* hasOtherFunc) {
 
 static bool lastRowScanOptCheckLastCache(SAggLogicNode* pAgg, SScanLogicNode* pScan) {
   // Only one of LAST and LASTROW can appear
-  if (pAgg->hasLastRow == pAgg->hasLast || (!pAgg->hasLast && !pAgg->hasLastRow) || NULL != pAgg->pGroupKeys || NULL != pScan->node.pConditions ||
+  if ((pAgg->hasLastRow == pAgg->hasLast && !pAgg->hasLastRow) || (!pAgg->hasLast && !pAgg->hasLastRow) || NULL != pAgg->pGroupKeys || NULL != pScan->node.pConditions ||
       !hasSuitableCache(pScan->cacheLastMode, pAgg->hasLastRow, pAgg->hasLast) ||
       IS_TSWINDOW_SPECIFIED(pScan->scanRange)) {
     return false;
@@ -2578,7 +2605,7 @@ static bool lastRowScanOptMayBeOptimized(SLogicNode* pNode) {
   }
   
   bool hasOtherFunc = false;
-  if (!lastRowScanOptCheckFuncList(pNode, &hasOtherFunc)) {
+  if (!lastRowScanOptCheckFuncList(pNode, pScan->cacheLastMode, &hasOtherFunc)) {
     return false;
   }
 
@@ -2593,12 +2620,14 @@ typedef struct SLastRowScanOptSetColDataTypeCxt {
   bool       doAgg;
   SNodeList* pLastCols;
   SNodeList* pOtherCols;
+  int32_t    funcType;
 } SLastRowScanOptSetColDataTypeCxt;
 
 static EDealRes lastRowScanOptSetColDataType(SNode* pNode, void* pContext) {
   if (QUERY_NODE_COLUMN == nodeType(pNode)) {
     SLastRowScanOptSetColDataTypeCxt* pCxt = pContext;
     if (pCxt->doAgg) {
+	    ((SColumnNode*)pNode)->node.funcType = pCxt->funcType;
       nodesListMakeAppend(&pCxt->pLastCols, pNode);
       getLastCacheDataType(&(((SColumnNode*)pNode)->node.resType));
     } else {
@@ -2623,11 +2652,13 @@ static void lastRowScanOptSetLastTargets(SNodeList* pTargets, SNodeList* pLastCo
     FOREACH(pCol, pLastCols) {
       if (nodesEqualNode(pCol, pTarget)) {
         getLastCacheDataType(&(((SColumnNode*)pTarget)->node.resType));
+        ((SColumnNode*)pTarget)->node.funcType = ((SColumnNode*)pCol)->node.funcType;
         found = true;
         break;
       }
     }
-    if (!found && erase) {
+    int32_t funcType = ((SColumnNode*)pTarget)->node.funcType;
+    if (!found && erase && (funcType == 0 || funcType != FUNCTION_TYPE_CACHE_LAST_ROW)) {
       ERASE_NODE(pTargets);
       continue;
     }
@@ -2654,6 +2685,7 @@ static void lastRowScanOptRemoveUslessTargets(SNodeList* pTargets, SNodeList* pL
         }
       }
     }
+
     if (!found) {
       ERASE_NODE(pTargets);
       continue;
@@ -2673,11 +2705,17 @@ static int32_t lastRowScanOptimize(SOptimizeContext* pCxt, SLogicSubplan* pLogic
   SNode*                           pNode = NULL;
   SColumnNode*                     pPKTsCol = NULL;
   SColumnNode*                     pNonPKCol = NULL;
+  SScanLogicNode* pScan = (SScanLogicNode*)nodesListGetNode(pAgg->node.pChildren, 0);
+  pScan->scanType = SCAN_TYPE_LAST_ROW;
+  pScan->igLastNull = pAgg->hasLast ? true : false;
+  SArray* isDuplicateCol = taosArrayInit(pScan->pScanCols->length, sizeof(bool));
 
   FOREACH(pNode, pAgg->pAggFuncs) {
     SFunctionNode* pFunc = (SFunctionNode*)pNode;
     int32_t        funcType = pFunc->funcType;
-    if (FUNCTION_TYPE_LAST_ROW == funcType || FUNCTION_TYPE_LAST == funcType) {
+    SNode* pParamNode = nodesListGetNode(pFunc->pParameterList, 0);
+    if (FUNCTION_TYPE_LAST_ROW == funcType ||
+        (FUNCTION_TYPE_LAST == funcType && nodeType(pParamNode) != QUERY_NODE_OPERATOR)) {
       int32_t len = snprintf(pFunc->functionName, sizeof(pFunc->functionName),
                              FUNCTION_TYPE_LAST_ROW == funcType ? "_cache_last_row" : "_cache_last");
       pFunc->functionName[len] = '\0';
@@ -2686,6 +2724,63 @@ static int32_t lastRowScanOptimize(SOptimizeContext* pCxt, SLogicSubplan* pLogic
         nodesClearList(cxt.pLastCols);
         return code;
       }
+      cxt.funcType = pFunc->funcType;
+      // add duplicate cols which be removed for both last_row, last
+      if ((pAgg->hasLast && pAgg->hasLastRow)
+           && (FUNCTION_TYPE_CACHE_LAST_ROW == pFunc->funcType || FUNCTION_TYPE_CACHE_LAST == pFunc->funcType)) {
+        if (QUERY_NODE_COLUMN == nodeType(pParamNode)) {
+          SNode* pColNode = NULL;
+          int i = 0;
+          FOREACH(pColNode, pScan->pScanCols) {
+            bool isDup = false;
+            bool* isDuplicate = taosArrayGet(isDuplicateCol, i);
+            if (NULL == isDuplicate) {
+              taosArrayInsert(isDuplicateCol, i, &isDup);
+              isDuplicate = taosArrayGet(isDuplicateCol, i);
+            }
+            i++;
+            if (nodesEqualNode(pParamNode, pColNode)) {
+            //if (nodeListNodeEqual(pFunc->pParameterList, pColNode)) {
+              if(*isDuplicate) {
+                SNode* newColNode = nodesCloneNode(pColNode);
+                sprintf(((SColumnNode*)newColNode)->colName, "#dup_col.%p", newColNode);
+                sprintf(((SColumnNode*)pParamNode)->colName, "#dup_col.%p", newColNode);
+                ((SColumnNode*)newColNode)->node.funcType = pFunc->funcType;
+                nodesListAppend(pScan->pScanCols, newColNode);
+                nodesListAppend(pScan->node.pTargets, nodesCloneNode(newColNode));
+                if (funcType != FUNCTION_TYPE_LAST) {
+                  nodesListMakeAppend(&cxt.pOtherCols, nodesCloneNode(newColNode));
+                }
+              } else {
+                isDup = true;
+                *isDuplicate = isDup;
+                ((SColumnNode*)pColNode)->node.funcType = pFunc->funcType;
+                if (funcType != FUNCTION_TYPE_LAST && !nodeListNodeEqual(cxt.pOtherCols, pColNode)) {
+                  nodesListMakeAppend(&cxt.pOtherCols, nodesCloneNode(pColNode));
+                }
+              }
+              //break;
+            }else if (nodeListNodeEqual(pFunc->pParameterList, pColNode)) {
+              if(funcType != FUNCTION_TYPE_LAST && !nodeListNodeEqual(cxt.pOtherCols, pColNode)) {
+                nodesListMakeAppend(&cxt.pOtherCols, nodesCloneNode(pColNode));
+                ((SColumnNode*)pColNode)->node.funcType = pFunc->funcType;
+              }
+            }
+          }
+        }
+        //if (FUNCTION_TYPE_CACHE_LAST_ROW == pFunc->funcType &&
+        //    ((SColumnNode*)nodesListGetCell(pFunc->pParameterList, 1))->colId != PRIMARYKEY_TIMESTAMP_COL_ID) {
+        //  nodesListErase(pFunc->pParameterList, nodesListGetCell(pFunc->pParameterList, 1));
+        //}
+      }else {
+        SNode* pColNode = NULL;
+        FOREACH(pColNode, pScan->pScanCols) {
+          if (QUERY_NODE_COLUMN == nodeType(pColNode)) {
+            ((SColumnNode*)pColNode)->node.funcType = pFunc->funcType;
+          }
+        }
+      }
+
       if (FUNCTION_TYPE_LAST == funcType) {
         nodesWalkExpr(nodesListGetNode(pFunc->pParameterList, 0), lastRowScanOptSetColDataType, &cxt);
         nodesListErase(pFunc->pParameterList, nodesListGetCell(pFunc->pParameterList, 1));
@@ -2703,15 +2798,15 @@ static int32_t lastRowScanOptimize(SOptimizeContext* pCxt, SLogicSubplan* pLogic
             pNonPKCol = pCol;
           }
         }
+      } else if (FUNCTION_TYPE_LAST == funcType && QUERY_NODE_OPERATOR == nodeType(pParamNode)) {
+        pScan->scanType = SCAN_TYPE_TABLE;
       }
     }
   }
 
-  SScanLogicNode* pScan = (SScanLogicNode*)nodesListGetNode(pAgg->node.pChildren, 0);
-  pScan->scanType = SCAN_TYPE_LAST_ROW;
-  pScan->igLastNull = pAgg->hasLast ? true : false;
   if (NULL != cxt.pLastCols) {
     cxt.doAgg = false;
+    cxt.funcType = FUNCTION_TYPE_CACHE_LAST;
     lastRowScanOptSetLastTargets(pScan->pScanCols, cxt.pLastCols, true);
     nodesWalkExprs(pScan->pScanPseudoCols, lastRowScanOptSetColDataType, &cxt);
     lastRowScanOptSetLastTargets(pScan->node.pTargets, cxt.pLastCols, false);
@@ -2728,10 +2823,12 @@ static int32_t lastRowScanOptimize(SOptimizeContext* pCxt, SLogicSubplan* pLogic
     }
     nodesClearList(cxt.pLastCols);
   }
+
   pAgg->hasLastRow = false;
   pAgg->hasLast = false;
 
   pCxt->optimized = true;
+  taosArrayDestroy(isDuplicateCol);
   return TSDB_CODE_SUCCESS;
 }
 
@@ -2749,7 +2846,7 @@ static bool splitCacheLastFuncOptMayBeOptimized(SLogicNode* pNode) {
   }
 
   bool hasOtherFunc = false;
-  if (!lastRowScanOptCheckFuncList(pNode, &hasOtherFunc)) {
+  if (!lastRowScanOptCheckFuncList(pNode, pScan->cacheLastMode, &hasOtherFunc)) {
     return false;
   }
 
@@ -2770,6 +2867,16 @@ static int32_t splitCacheLastFuncOptCreateAggLogicNode(SAggLogicNode** pNewAgg, 
 
   pNew->hasLastRow = false;
   pNew->hasLast = false;
+  SNode* pFuncNode = NULL;
+  FOREACH(pFuncNode, pFunc) {
+    SFunctionNode* pFunc = (SFunctionNode*)pFuncNode;
+    if (FUNCTION_TYPE_LAST_ROW == pFunc->funcType) {
+      pNew->hasLastRow = true;
+    } else if (FUNCTION_TYPE_LAST == pFunc->funcType) {
+      pNew->hasLast = true;
+    }
+  }
+
   pNew->hasTimeLineFunc = pAgg->hasTimeLineFunc;
   pNew->hasGroupKeyOptimized = false;
   pNew->onlyHasKeepOrderFunc = pAgg->onlyHasKeepOrderFunc;
@@ -2894,21 +3001,31 @@ static int32_t splitCacheLastFuncOptimize(SOptimizeContext* pCxt, SLogicSubplan*
   if (NULL == pAgg) {
     return TSDB_CODE_SUCCESS;
   }
-
+  SScanLogicNode* pScan = (SScanLogicNode*)nodesListGetNode(pAgg->node.pChildren, 0);
   SNode* pNode = NULL;
   SNodeList* pAggFuncList = NULL;
+
   {
+    bool hasLast = false;
+    bool hasLastRow = false;
     WHERE_EACH(pNode, pAgg->pAggFuncs) {
       SFunctionNode* pFunc = (SFunctionNode*)pNode;
       int32_t        funcType = pFunc->funcType;
-      if (FUNCTION_TYPE_LAST_ROW != funcType && FUNCTION_TYPE_LAST != funcType && 
-          FUNCTION_TYPE_SELECT_VALUE != funcType && FUNCTION_TYPE_GROUP_KEY != funcType) {
+
+      if (isNeedSplitCacheLastFunc(pFunc, pScan)) {
         nodesListMakeStrictAppend(&pAggFuncList, nodesCloneNode(pNode));
         ERASE_NODE(pAgg->pAggFuncs);
         continue;
       }
+      if (FUNCTION_TYPE_LAST_ROW == funcType ) {
+        hasLastRow = true;
+      } else if (FUNCTION_TYPE_LAST == funcType) {
+        hasLast = true;
+      }
       WHERE_NEXT;    
     }
+    pAgg->hasLast = hasLast;
+    pAgg->hasLastRow = hasLastRow;
   }
 
   if (NULL == pAggFuncList) {
